@@ -6,7 +6,7 @@ const COLORS = {
   wait:  { bg: 'var(--amber-bg)', txt: 'var(--amber-txt)', label: '⏳ WAIT'  }
 }
 
-export default function AskModal({ onClose }) {
+export default function AskModal({ onClose, profile }) {
   const [question, setQuestion] = useState('')
   const [context, setContext]   = useState('')
   const [result, setResult]     = useState(null)
@@ -21,7 +21,7 @@ export default function AskModal({ onClose }) {
       const res = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, context })
+        body: JSON.stringify({ question, context, profile })
       })
       if (!res.ok) throw new Error()
       setResult(await res.json())
@@ -37,10 +37,8 @@ export default function AskModal({ onClose }) {
   return (
     <>
       <div onClick={onClose} style={{
-        position: 'fixed', inset: 0,
-        background: 'rgba(0,0,0,0.7)',
-        backdropFilter: 'blur(4px)',
-        zIndex: 40
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+        backdropFilter: 'blur(4px)', zIndex: 40
       }} />
 
       <div className="slide-up" style={{
@@ -53,7 +51,11 @@ export default function AskModal({ onClose }) {
         zIndex: 50
       }}>
         <div style={{ width: 36, height: 4, background: 'var(--gray-3)', borderRadius: 2, margin: '0 auto 20px' }} />
-        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>Ask Kairos</h2>
+        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>Ask Kairos</h2>
+        {profile?.name && (
+          <p style={{ fontSize: 13, color: 'var(--gray-4)', marginBottom: 16 }}>for {profile.name}</p>
+        )}
+        {!profile?.name && <div style={{ marginBottom: 16 }} />}
 
         {!result ? (
           <>

@@ -1,4 +1,4 @@
-import { scoredSlots } from './daily.js'
+import { scoredSlots, buildSeed } from './daily.js'
 
 const FALLBACK = {
   decision: 'wait',
@@ -17,24 +17,22 @@ function detectDimension(question) {
 }
 
 function evaluate(slots, dimension) {
-  const sorted = [...slots].sort((a, b) => b.score - a.score)
-  const best   = sorted[0]
-  const worst  = sorted[sorted.length - 1]
+  const sorted  = [...slots].sort((a, b) => b.score - a.score)
+  const best    = sorted[0]
+  const worst   = sorted[sorted.length - 1]
+  const hour    = new Date().getHours()
   const current = slots.find(s => {
-    const now  = new Date()
-    const hour = now.getHours()
-    const [start] = s.time.split('–')
-    const [h] = start.split(':').map(Number)
+    const [h] = s.time.split('–')[0].split(':').map(Number)
     return hour >= h && hour < h + 2
   }) || slots[0]
 
-  const dimScore = current[dimension] ?? current.decision
+  const dimScore  = current[dimension] ?? current.decision
   const riskScore = current.risk
 
   let decision
-  if (dimScore >= 1 && riskScore >= 0)   decision = 'do'
+  if (dimScore >= 1 && riskScore >= 0)        decision = 'do'
   else if (riskScore <= -1 || dimScore <= -1) decision = 'avoid'
-  else                                        decision = 'wait'
+  else                                         decision = 'wait'
 
   const confidence = Math.min(100, Math.max(0,
     Math.round(((best.score + 6) / 12) * 100)
@@ -46,14 +44,17 @@ function evaluate(slots, dimension) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { question, context } = req.body || {}
+  const { question, context, profile } = req.body || {}
   if (!question) return res.status(400).json(FALLBACK)
 
   try {
-    const seed      = new Date().getDate()
+    const seed      = buildSeed(profile?.dob || null)
     const slots     = scoredSlots(seed)
     const dimension = detectDimension(question)
     const result    = evaluate(slots, dimension)
+
+    const userName = profile?.name ? `User: ${profile.name}. ` : ''
+    const userType = profile?.type ? `Type: ${profile.type}. ` : ''
 
     const prompt = `You are a decision-support message writer.
 
@@ -66,10 +67,12 @@ STRUCTURED DATA (do not change these values):
 - risk score: ${result.riskScore}
 - question: ${question}
 - context: ${context || 'none'}
+- ${userName}${userType}
 
 TASK:
-Write a short 1–2 sentence "message" that explains the decision to the user naturally.
-Reference the question topic. Do NOT invent new logic — use only the data above.
+Write a short 1–2 sentence "message" explaining the decision naturally.
+Reference the question topic and user name if provided.
+Do NOT invent new logic — use only the data above.
 
 OUTPUT (STRICT JSON — no extra text):
 {

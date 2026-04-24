@@ -1,4 +1,4 @@
-export default function BottomNav({ onAsk }) {
+export default function BottomNav({ onAsk, onProfile }) {
   return (
     <div style={{
       position: 'fixed', bottom: 0, left: '50%',
@@ -11,13 +11,14 @@ export default function BottomNav({ onAsk }) {
       display: 'flex', gap: 8,
       zIndex: 30
     }}>
-      <button style={{
+      <button onClick={onProfile} className="scale-tap" style={{
         flex: 1, padding: '12px 0',
         background: 'var(--gray-2)', border: 'none', borderRadius: 12,
-        color: 'var(--white)', fontSize: 14, fontWeight: 600, fontFamily: 'inherit'
-      }}>Today</button>
+        color: 'var(--white)', fontSize: 14, fontWeight: 600,
+        cursor: 'pointer', fontFamily: 'inherit'
+      }}>👤</button>
       <button onClick={onAsk} className="scale-tap" style={{
-        flex: 2, padding: '12px 0',
+        flex: 3, padding: '12px 0',
         background: 'var(--yellow)', border: 'none', borderRadius: 12,
         color: '#000', fontSize: 15, fontWeight: 700,
         cursor: 'pointer', fontFamily: 'inherit'

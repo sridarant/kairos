@@ -1,16 +1,46 @@
 import Logo from './Logo'
 
-export default function HomeScreen({ daily, loading }) {
+function MemberCard({ member, delay }) {
+  return (
+    <div className="fade-in" style={{
+      background: 'var(--gray-2)', borderRadius: 12, padding: 14,
+      animationDelay: delay
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <p style={{ fontSize: 13, fontWeight: 600 }}>{member.name}</p>
+        <p style={{ fontSize: 11, color: 'var(--yellow)', fontWeight: 600 }}>{member.golden_window}</p>
+      </div>
+      <p style={{ fontSize: 13, color: 'var(--gray-4)' }}>{member.summary}</p>
+    </div>
+  )
+}
+
+export default function HomeScreen({ daily, loading, primaryUser, onProfileOpen }) {
+  const greeting = primaryUser?.name ? `Hey ${primaryUser.name.split(' ')[0]}` : 'Today'
+
+  const header = (
+    <div className="fade-in" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Logo />
+          <h1 style={{ fontSize: 20, fontWeight: 600 }}>Kairos</h1>
+        </div>
+        <button onClick={onProfileOpen} className="scale-tap" style={{
+          background: 'var(--gray-2)', border: 'none', borderRadius: 20,
+          color: 'var(--gray-4)', fontSize: 13, padding: '6px 12px',
+          cursor: 'pointer', fontFamily: 'inherit'
+        }}>
+          {primaryUser?.name ? `👤 ${primaryUser.name.split(' ')[0]}` : '+ Profile'}
+        </button>
+      </div>
+      <p style={{ fontSize: 14, color: 'var(--gray-4)', marginTop: 4 }}>Know when to act</p>
+    </div>
+  )
+
   if (loading) {
     return (
       <div style={{ padding: 16, paddingTop: 56 }}>
-        <div className="fade-in" style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Logo />
-            <h1 style={{ fontSize: 20, fontWeight: 600 }}>Kairos</h1>
-          </div>
-          <p style={{ fontSize: 14, color: 'var(--gray-4)', marginTop: 4 }}>Know when to act</p>
-        </div>
+        {header}
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 64 }}>
           <span className="spinner" />
         </div>
@@ -22,14 +52,7 @@ export default function HomeScreen({ daily, loading }) {
 
   return (
     <div style={{ padding: 16, paddingTop: 56 }}>
-
-      <div className="fade-in" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Logo />
-          <h1 style={{ fontSize: 20, fontWeight: 600 }}>Kairos</h1>
-        </div>
-        <p style={{ fontSize: 14, color: 'var(--gray-4)', marginTop: 4 }}>Know when to act</p>
-      </div>
+      {header}
 
       <div className="fade-in" style={{
         background: 'var(--yellow)', color: '#000',
@@ -37,7 +60,7 @@ export default function HomeScreen({ daily, loading }) {
         animationDelay: '0.05s'
       }}>
         <p style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, opacity: 0.6 }}>
-          Best Time Today
+          {greeting} — Best Time Today
         </p>
         <p style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{daily.golden_window}</p>
       </div>
@@ -61,10 +84,22 @@ export default function HomeScreen({ daily, loading }) {
 
       </div>
 
-      <p className="fade-in" style={{ fontSize: 12, color: 'var(--gray-4)', textAlign: 'center', marginTop: 24, animationDelay: '0.25s' }}>
+      {daily.members && daily.members.length > 1 && (
+        <div className="fade-in" style={{ marginTop: 24, animationDelay: '0.25s' }}>
+          <p style={{ fontSize: 12, color: 'var(--gray-4)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Family
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {daily.members.map((m, i) => (
+              <MemberCard key={i} member={m} delay={`${0.28 + i * 0.05}s`} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="fade-in" style={{ fontSize: 12, color: 'var(--gray-4)', textAlign: 'center', marginTop: 24, animationDelay: '0.3s' }}>
         Confidence: {daily.confidence_summary}%
       </p>
-
     </div>
   )
 }
