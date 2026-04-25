@@ -1,5 +1,5 @@
 import {
-  scoredSlots, buildSeed, getPlanet, getLunarPhase, getDayType,
+  scoredSlots, buildSeed, buildTraits, getPlanet, getLunarPhase, getDayType,
   dominantDimension, toConfidence, DIM_LABEL, buildReasoning
 } from './engine.js'
 
@@ -57,20 +57,25 @@ function buildPrompt(result, r, question, context, profile) {
   const decisionGuide = {
     do:    'Affirm the action clearly — explain why conditions support it.',
     avoid: 'Discourage the action — explain which dimension is unfavourable.',
-    wait:  'Recommend patience — explain conditions are not yet aligned.'
+    wait:  'Recommend patience — conditions are not yet aligned.'
   }[r.decision]
 
   const riskLine = r.riskFlag === 'elevated'
     ? 'Risk is elevated — include a brief caution.'
     : r.riskFlag === 'reduced'
-    ? 'Risk appetite is reduced — note conservative actions are favoured.'
+    ? 'Risk appetite is reduced — conservative actions are favoured.'
     : 'Risk is neutral — no need to mention it.'
 
   const nameInstruction = profile?.name
     ? `Address ${profile.name.split(' ')[0]} by first name once at the start.`
     : 'Do not use a name.'
 
-  return `You are a decision-support message writer for Kairos v3.0.
+  // Pick the single most relevant trait line for personalisation
+  const traitHint = r.traitLines && r.traitLines.length > 0
+    ? `Personalisation hint (weave in naturally, once): "${r.traitLines[0]}"`
+    : 'No personalisation hint.'
+
+  return `You are a decision-support message writer for Kairos v4.1.
 
 FIXED VALUES — do not change:
 - decision: ${result.decision}
@@ -81,20 +86,26 @@ FIXED VALUES — do not change:
 INTERNAL REASONING — use to write the message:
 - Question: ${question}
 - Context: ${r.ctxHuman} (score: ${result.dimScore})
-- Planetary influence: ${r.planet} — ${r.planetInfluence}
+- Planetary influence: ${r.planetLabel} — ${r.planetInfluence}
 - Lunar phase: ${r.lunarPhase} — ${r.lunarLabel}
 - Day archetype: ${r.dayTypeName} — ${r.dayTypeLabel}
-- Dominant dimension today: ${r.dimHuman}
+- Nakshatra: ${r.nakshatraCultural} — ${r.nakshatraLabel}
+- Dominant dimension: ${r.dimHuman}
 - User context: ${context || 'none'}
 - Profile type: ${profile?.type || 'none'}
+
+USER TRAIT:
+- ${traitHint}
 
 WRITING RULES:
 1. ${decisionGuide}
 2. Mention ${r.ctxHuman} naturally — not as a label.
-3. Reference ONE of: the planetary influence, the lunar phase, or the day archetype — whichever is most relevant. Do not use the word "planet".
-4. ${riskLine}
-5. ${nameInstruction}
-6. 1–2 sentences max. Confident, human, specific.
+3. Reference the planetary influence using the format "${r.planetLabel}" once, naturally. Do not use the word "planet".
+4. Optionally include the nakshatra name (${r.nakshatraCultural}) if it adds meaning — keep it brief.
+5. ${riskLine}
+6. ${nameInstruction}
+7. If a trait hint is given, include it naturally — do not quote it verbatim.
+8. 1–2 sentences max. Confident, human, specific.
 
 OUTPUT — strict JSON only, no markdown:
 {
@@ -113,17 +124,18 @@ export default async function handler(req, res) {
   if (!question) return res.status(400).json(FALLBACK)
 
   try {
-    const planet  = getPlanet()
-    const lunar   = getLunarPhase()
-    const dayType = getDayType()
-    const seed    = buildSeed(profile?.dob || null)
-    const slots   = scoredSlots(seed, planet, profile?.type || null, lunar, dayType)
-    const ctx     = detectContext(question)
-    const result  = evaluate(slots, ctx)
-    const dominant = dominantDimension(planet, lunar)
+    const planet   = getPlanet()
+    const lunar    = getLunarPhase()
+    const dayType  = getDayType()
+    const seed     = buildSeed(profile?.dob || null)
+    const traits   = buildTraits(profile?.dob || null)
+    const slots    = scoredSlots(seed, planet, profile?.type || null, lunar, dayType, traits)
+    const ctx      = detectContext(question)
+    const result   = evaluate(slots, ctx)
+    const dominant = dominantDimension(planet, lunar, traits)
 
     const reasoning = buildReasoning({
-      planet, lunar, dayType, dominant,
+      planet, lunar, dayType, traits, dominant,
       ctx:       ctx.primary,
       dimScore:  result.dimScore,
       riskScore: result.riskScore,

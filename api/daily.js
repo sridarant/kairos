@@ -1,5 +1,5 @@
 import {
-  scoredSlots, buildSeed, getPlanet, getLunarPhase, getDayType,
+  scoredSlots, buildSeed, buildTraits, getPlanet, getLunarPhase, getDayType,
   toConfidence, dominantDimension, DIM_LABEL, PLANET_REASONING, buildReasoning
 } from './engine.js'
 
@@ -26,36 +26,40 @@ const WATCH_MSGS = [
 ]
 
 function buildSummary(r, goldenTime) {
-  const riskNote = r.riskFlag === 'elevated'
-    ? ' Manage risk carefully during this window.'
+  // Pick the single most relevant trait line for the summary
+  const traitHint = r.traitLines.length > 0 ? ` ${r.traitLines[0]}` : ''
+  const riskNote  = r.riskFlag === 'elevated'
+    ? ' Manage risk carefully.'
     : r.riskFlag === 'reduced'
-    ? ' Favour conservative moves — risk appetite is low.'
+    ? ' Favour conservative moves.'
     : ''
+  // Cultural layer: planet label + nakshatra, kept brief
+  const culturalNote = `${r.planetLabel} ${r.planetInfluence}; today falls under ${r.nakshatraCultural} (${r.nakshatraLabel}).`
   return (
-    `${goldenTime} is your strongest window today. ` +
-    `${r.dimHuman} is heightened — ${r.planetInfluence}, ` +
-    `the ${r.lunarLabel}, and it's ${r.dayTypeLabel}.${riskNote}`
+    `${goldenTime} is your strongest window — ${r.dimHuman} is heightened. ` +
+    `${culturalNote}${riskNote}${traitHint}`
   )
 }
 
 function computeForUser(user, planet, lunar, dayType) {
   const seed   = buildSeed(user.dob)
-  const slots  = scoredSlots(seed, planet, user.type, lunar, dayType)
+  const traits = buildTraits(user.dob)
+  const slots  = scoredSlots(seed, planet, user.type, lunar, dayType, traits)
   const sorted = [...slots].sort((a, b) => b.score - a.score)
   const golden = sorted[0]
   const worst  = sorted[sorted.length - 1]
   const medium = [...slots].sort((a, b) => Math.abs(a.score) - Math.abs(b.score))[0]
 
-  const dominant   = dominantDimension(planet, lunar)
+  const dominant   = dominantDimension(planet, lunar, traits)
   const confidence = toConfidence(golden.score, worst.score)
 
   const reasoning = buildReasoning({
-    planet, lunar, dayType,
+    planet, lunar, dayType, traits,
     dominant,
-    ctx:      dominant,
-    dimScore: golden[dominant] ?? golden.dec,
+    ctx:       dominant,
+    dimScore:  golden[dominant] ?? golden.dec,
     riskScore: golden.risk,
-    decision: 'do'
+    decision:  'do'
   })
 
   return {
@@ -69,11 +73,12 @@ function computeForUser(user, planet, lunar, dayType) {
     confidence,
     _reasoning: {
       dominant,
-      planet:      planet.name,
-      lunarPhase:  lunar.name,
-      dayType:     dayType.name,
+      planet:          planet.name,
+      lunarPhase:      lunar.name,
+      dayType:         dayType.name,
       planetInfluence: PLANET_REASONING[planet.name],
-      riskFlag:    reasoning.riskFlag
+      riskFlag:        reasoning.riskFlag,
+      traits
     }
   }
 }
