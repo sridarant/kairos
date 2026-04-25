@@ -26,7 +26,7 @@ const WATCH_MSGS = [
   'Stress peaks around context-switching'
 ]
 
-function buildSummary(r, goldenTime) {
+function buildSummary(r, goldenTime, avoidTime) {
   const traitHint = r.traitLines.length > 0 ? ` ${r.traitLines[0]}` : ''
   const riskNote  = r.riskFlag === 'elevated'
     ? ' Manage risk carefully.'
@@ -35,12 +35,13 @@ function buildSummary(r, goldenTime) {
     : ''
   const culturalNote = `${r.planetLabel} ${r.planetInfluence}; today falls under ${r.nakshatraCultural} (${r.nakshatraLabel}).`
   const birthNote = [
-    r.lagnaSign   ? `Lagna in ${r.lagnaSign}`   : '',
+    r.lagnaSign    ? `Lagna in ${r.lagnaSign}`   : '',
     r.moonSignName ? `Moon in ${r.moonSignName}` : ''
   ].filter(Boolean).join(', ')
-  const birthLine = birthNote ? ` ${birthNote} shapes your personal alignment today.` : ''
+  const birthLine = birthNote ? ` ${birthNote} shapes your personal alignment.` : ''
   return (
-    `${goldenTime} is your strongest window — ${r.dimHuman} is heightened. ` +
+    `Use your ${goldenTime} window for key decisions and important actions. ` +
+    `Avoid starting new commitments after ${avoidTime}. ` +
     `${culturalNote}${birthLine}${riskNote}${traitHint}`
   )
 }
@@ -74,7 +75,7 @@ function computeForUser(user, planet, lunar, dayType) {
     avoid_window:  worst.time,
     lagna:         lagna?.name    || null,
     moon_sign:     moonSign?.name || null,
-    summary:       buildSummary(reasoning, golden.time),
+    summary:       buildSummary(reasoning, golden.time, worst.time),
     do:            DO_MSGS[seed % DO_MSGS.length],
     avoid:         `${worst.time} — ` + AVOID_MSGS[(seed + 1) % AVOID_MSGS.length],
     watch:         `${medium.time} — ` + WATCH_MSGS[(seed + 2) % WATCH_MSGS.length],

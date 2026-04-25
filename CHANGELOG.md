@@ -1,31 +1,29 @@
 # Kairos Changelog
 
-## v5.0.0 — Birth Astro Layer (2026-04-25)
+## v5.1.0 — Action Intelligence Upgrade (2026-04-25)
 
 ### Features
-- Lagna (ascendant) computation from birth_time:
-  `lagnaIndex = floor(hour / 2) % 12` → zodiac sign → full scoring impact
-- Personal moon sign from DOB: `dob_day % 12` → zodiac sign → moderate scoring impact
-- 12-sign zodiac scoring table: each sign maps to decision/communication/risk/focus deltas
-- Lagna applied at full weight (1.0×); moon sign at half weight (0.5×, rounded)
-- `computeLagna(birth_time)` and `computeMoonSign(dob)` exported from engine
-- ProfileModal now includes "Birth Time" input for Lagna computation
-- Daily summary includes "Lagna in X, Moon in Y shapes your personal alignment today"
-- Ask response includes `lagna` and `moon_sign` fields
-- Ask prompt instructs Claude to reference lagna/moon sign nature naturally once
-- `dominantDimension()` now incorporates lagna and moon sign into combined signal
-- `scoredSlots()` is now a 7-layer function: base → planet → lunar → day type → traits → lagna → moon sign
+- Actionable decision responses: every Ask reply now starts with a clear instruction
+  (e.g. "Proceed with this now", "Hold — act during 09:00–11:00", "Do not proceed today")
+- WAIT responses include `next_best` — the next highest-scoring window outside the current slot
+- `next_best` field returned in Ask API response
+- Improved context classification with 5 categories: career, money, learning, health, relationships
+- Each context now carries a `verb` used to generate the action instruction deterministically
 
 ### Improvements
-- Family members with different birth times will have different Lagna and thus different golden windows
-- Users without birth_time gracefully skip the lagna layer (no null errors)
-- Users without DOB skip the moon sign layer with the same graceful fallback
+- `buildPrompt()` restructured: action and timing are fixed values, not suggestions to Claude
+- Claude only writes the message sentence — logic, timing, action are all engine-computed
+- Daily `buildSummary()` is now actionable: "Use your X window… Avoid starting new commitments after Y"
+- Prompt version updated to Kairos v5.1
+
+## v5.0.0 — Birth Astro Layer (2026-04-25)
+- Lagna (ascendant) and personal moon sign, 7-layer scoring engine
 
 ## v4.1.0 — Cultural Language Layer (2026-04-25)
 - Sanskrit and Tamil names for planets and nakshatras
 
 ## v3.1.0 — Personal Realism Upgrade (2026-04-25)
-- User trait model: 6-layer scoring
+- User trait model, 6-layer scoring
 
 ## v3.0.0 — Astro Core Upgrade (2026-04-25)
 - Lunar phase, nakshatra day archetypes, 5-layer scoring

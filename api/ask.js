@@ -14,20 +14,23 @@ const FALLBACK = {
 
 function detectContext(question) {
   const q = question.toLowerCase()
-  if (/work|job|career|boss|colleague|project|deadline|client|meeting|office/.test(q))
-    return { primary: 'decision', secondary: 'communication', label: 'work' }
-  if (/money|invest|financial|fund|budget|cost|price|salary|loan|debt/.test(q))
-    return { primary: 'risk', secondary: 'decision', label: 'money' }
-  if (/learn|study|course|skill|read|practice|train|exam|school|university/.test(q))
-    return { primary: 'focus', secondary: 'decision', label: 'learning' }
-  if (/talk|relationship|friend|family|partner|conflict|conversation|discuss|call|message/.test(q))
-    return { primary: 'communication', secondary: 'focus', label: 'relationships' }
-  return { primary: 'decision', secondary: 'communication', label: 'general' }
+  if (/career|job|work|boss|colleague|project|deadline|client|office|promotion|resign|hire|fired|salary raise/.test(q))
+    return { primary: 'decision', secondary: 'communication', label: 'career', verb: 'act on this career matter' }
+  if (/money|invest|financial|fund|budget|cost|price|loan|debt|stock|savings|purchase|buy|spend/.test(q))
+    return { primary: 'risk', secondary: 'decision', label: 'money', verb: 'make this financial move' }
+  if (/study|learn|course|skill|read|practice|train|exam|school|university|research|focus/.test(q))
+    return { primary: 'focus', secondary: 'decision', label: 'learning', verb: 'pursue this learning goal' }
+  if (/health|doctor|medicine|exercise|diet|sleep|wellness|body|symptom|appointment/.test(q))
+    return { primary: 'focus', secondary: 'decision', label: 'health', verb: 'act on this health matter' }
+  if (/talk|meeting|conversation|discuss|call|message|relationship|friend|family|partner|conflict/.test(q))
+    return { primary: 'communication', secondary: 'focus', label: 'relationships', verb: 'have this conversation' }
+  return { primary: 'decision', secondary: 'communication', label: 'general', verb: 'proceed with this decision' }
 }
 
 function evaluate(slots, ctx) {
   const sorted  = [...slots].sort((a, b) => b.score - a.score)
   const best    = sorted[0]
+  const second  = sorted[1]
   const worst   = sorted[sorted.length - 1]
 
   const hour    = new Date().getHours()
@@ -44,78 +47,83 @@ function evaluate(slots, ctx) {
   else if (riskScore <= -1 || dimScore <= -1) decision = 'avoid'
   else                                         decision = 'wait'
 
+  // For WAIT: surface the next best window that isn't the current one
+  const nextBest = decision === 'wait'
+    ? (sorted.find(s => s.time !== current.time) || best)
+    : null
+
   return {
     decision,
-    best_time:  best.time,
-    avoid_time: worst.time,
-    confidence: toConfidence(best.score, worst.score),
+    best_time:   best.time,
+    avoid_time:  worst.time,
+    next_best:   nextBest?.time || null,
+    confidence:  toConfidence(best.score, worst.score),
     dimScore,
     riskScore
   }
 }
 
-function buildPrompt(result, r, question, context, profile) {
-  const decisionGuide = {
-    do:    'Affirm the action clearly — explain why conditions support it.',
-    avoid: 'Discourage the action — explain which dimension is unfavourable.',
-    wait:  'Recommend patience — conditions are not yet aligned.'
-  }[r.decision]
+function buildPrompt(result, r, ctx, question, context, profile) {
+  const firstName = profile?.name ? profile.name.split(' ')[0] : null
+
+  // Deterministic action instruction based on decision
+  const actionMap = {
+    do:    `Proceed with ${ctx.verb} now`,
+    wait:  `Hold for now — act during ${result.next_best || result.best_time}`,
+    avoid: `Do not ${ctx.verb} today`
+  }
+  const action = actionMap[r.decision]
 
   const riskLine = r.riskFlag === 'elevated'
-    ? 'Risk is elevated — include a brief caution.'
+    ? 'Risk is elevated — include one brief caution about timing.'
     : r.riskFlag === 'reduced'
-    ? 'Risk appetite is reduced — conservative actions are favoured.'
-    : 'Risk is neutral — no need to mention it.'
+    ? 'Risk appetite is reduced — note conservative action is favoured.'
+    : ''
 
-  const nameInstruction = profile?.name
-    ? `Address ${profile.name.split(' ')[0]} by first name once at the start.`
-    : 'Do not use a name.'
-
-  const traitHint = r.traitLines && r.traitLines.length > 0
-    ? `Personalisation hint (weave in naturally, once): "${r.traitLines[0]}"`
-    : 'No personalisation hint.'
+  const traitHint = r.traitLines?.length > 0
+    ? `User tendency (weave in once, naturally): "${r.traitLines[0]}"`
+    : ''
 
   const birthContext = [
-    r.lagnaSign    ? `Lagna: ${r.lagnaSign} — amplifies their natural ${r.lagnaSign} tendencies`   : '',
-    r.moonSignName ? `Moon sign: ${r.moonSignName} — colours their emotional decision layer` : ''
-  ].filter(Boolean).join('. ')
+    r.lagnaSign    ? `Lagna: ${r.lagnaSign}`         : '',
+    r.moonSignName ? `Moon sign: ${r.moonSignName}`  : ''
+  ].filter(Boolean).join(', ')
 
-  return `You are a decision-support message writer for Kairos v5.0.
+  const nameLine = firstName
+    ? `Open with "${firstName}, " then the action.`
+    : 'Do not use a name.'
 
-FIXED VALUES — do not change:
-- decision: ${result.decision}
+  return `You are an actionable decision-support writer for Kairos v5.1.
+
+FIXED VALUES — embed these exactly, do not invent alternatives:
+- decision: ${r.decision}
+- action:   ${action}
 - best_time: ${result.best_time}
 - avoid_time: ${result.avoid_time}
 - confidence: ${result.confidence}
 
-INTERNAL REASONING — use to write the message:
+CONTEXT FOR MESSAGE BODY:
 - Question: ${question}
-- Context: ${r.ctxHuman} (score: ${result.dimScore})
+- Context type: ${ctx.label} (dimension: ${r.ctxHuman})
 - Planetary influence: ${r.planetLabel} — ${r.planetInfluence}
-- Lunar phase: ${r.lunarPhase} — ${r.lunarLabel}
-- Day archetype: ${r.dayTypeName} — ${r.dayTypeLabel}
-- Nakshatra: ${r.nakshatraCultural} — ${r.nakshatraLabel}
+- Lunar: ${r.lunarPhase} — ${r.lunarLabel}
+- Nakshatra: ${r.nakshatraCultural}
 - Dominant dimension: ${r.dimHuman}
 - Birth profile: ${birthContext || 'not provided'}
-- User context: ${context || 'none'}
-- Profile type: ${profile?.type || 'none'}
+- Additional context: ${context || 'none'}
+${traitHint ? `- ${traitHint}` : ''}
 
-USER TRAIT:
-- ${traitHint}
-
-WRITING RULES:
-1. ${decisionGuide}
-2. Mention ${r.ctxHuman} naturally — not as a label.
-3. Reference the planetary influence using "${r.planetLabel}" once, naturally. Do not use the word "planet".
-4. If lagna or moon sign is available, weave one brief reference naturally (e.g. "your ${r.lagnaSign || r.moonSignName || ''} nature").
-5. ${riskLine}
-6. ${nameInstruction}
-7. If a trait hint is given, include it naturally — do not quote verbatim.
-8. 1–2 sentences max. Confident, human, specific.
+STRUCTURE TO FOLLOW (combine into 1–2 natural sentences):
+1. Start with the action: "${action}."
+2. Add timing: mention ${result.best_time} as the best window; mention ${result.avoid_time} as what to avoid.
+3. Give one short reason referencing ${r.dimHuman} and ${r.planetLabel} (no "planet" word).
+${riskLine ? `4. ${riskLine}` : ''}
+${birthContext ? `5. If natural, weave in a brief reference to the ${r.lagnaSign || r.moonSignName || ''} influence.` : ''}
+${nameLine}
 
 OUTPUT — strict JSON only, no markdown:
 {
-  "decision": "${result.decision}",
+  "decision": "${r.decision}",
   "best_time": "${result.best_time}",
   "avoid_time": "${result.avoid_time}",
   "message": "...",
@@ -152,7 +160,7 @@ export default async function handler(req, res) {
     reasoning.ctxHuman = DIM_LABEL[ctx.primary] || ctx.primary
     reasoning.dimHuman = DIM_LABEL[dominant]     || dominant
 
-    const prompt = buildPrompt(result, reasoning, question, context, profile)
+    const prompt = buildPrompt(result, reasoning, ctx, question, context, profile)
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -183,6 +191,7 @@ export default async function handler(req, res) {
       decision:    json.decision,
       best_time:   result.best_time,
       avoid_time:  result.avoid_time,
+      next_best:   result.next_best,
       message:     json.message,
       confidence:  result.confidence,
       planet:      planet.name,
