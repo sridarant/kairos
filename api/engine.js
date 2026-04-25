@@ -132,6 +132,43 @@ const ZODIAC = [
   { name: 'Pisces',      decision:  0, communication:  0, risk:  0, focus:  1 }
 ]
 
+// ─── Zodiac cultural names ────────────────────────────────────────────────────
+export const ZODIAC_CULTURAL = {
+  Aries:       'Mesha / மேஷம்',
+  Taurus:      'Rishabha / ரிஷபம்',
+  Gemini:      'Mithuna / மிதுனம்',
+  Cancer:      'Karka / கடகம்',
+  Leo:         'Simha / சிம்மம்',
+  Virgo:       'Kanya / கன்னி',
+  Libra:       'Tula / துலாம்',
+  Scorpio:     'Vrischika / விருச்சிகம்',
+  Sagittarius: 'Dhanus / தனுசு',
+  Capricorn:   'Makara / மகரம்',
+  Aquarius:    'Kumbha / கும்பம்',
+  Pisces:      'Meena / மீனம்'
+}
+
+// "Aries Lagna (Mesha / மேஷம்)"
+export function lagnaLabel(signName) {
+  if (!signName) return null
+  const cultural = ZODIAC_CULTURAL[signName] || signName
+  return `${signName} Lagna (${cultural})`
+}
+
+// "Gemini Rasi (Mithuna / மிதுனம்)"
+export function rasiLabel(signName) {
+  if (!signName) return null
+  const cultural = ZODIAC_CULTURAL[signName] || signName
+  return `${signName} Rasi (${cultural})`
+}
+
+// "Jupiter Dasha (Guru / குரு)" — uses existing PLANET_CULTURAL map
+export function dashaLabel(planetName) {
+  if (!planetName) return null
+  const cultural = PLANET_CULTURAL[planetName] || planetName
+  return `${planetName} Dasha (${cultural})`
+}
+
 // Lagna: derived from birth_time hour — stronger weight (factor 1.0)
 // Moon sign: derived from dob day — moderate weight (factor 0.5, rounded)
 export function computeLagna(birthTime) {
@@ -248,10 +285,14 @@ export function buildReasoning({ planet, lunar, dayType, dominant, ctx, dimScore
   const ctxHuman  = DIM_LABEL[ctx]      || ctx
   const riskFlag  = riskScore >= 1 ? 'elevated' : riskScore <= -1 ? 'reduced' : 'neutral'
 
+  // Dasha: keyed to planet of the day — represents the dominant life-phase influence today
+  const dashaLabelStr = dashaLabel(p.name)
+
   return {
     planet:            p.name,
     planetLabel:       planetLabel(p.name),
     planetInfluence,
+    dashaLabel:        dashaLabelStr,
     lunarPhase:        lu.name,
     lunarLabel:        lu.label,
     dayTypeName:       dt.name,
@@ -259,8 +300,10 @@ export function buildReasoning({ planet, lunar, dayType, dominant, ctx, dimScore
     nakshatraName:     nk.name,
     nakshatraCultural: nk.cultural,
     nakshatraLabel:    nk.label,
-    lagnaSign:         lagna?.name     || null,
-    moonSignName:      moonSign?.name  || null,
+    lagnaSign:         lagna?.name    || null,
+    lagnaLabel:        lagnaLabel(lagna?.name),
+    moonSignName:      moonSign?.name || null,
+    rasiLabel:         rasiLabel(moonSign?.name),
     dominant,
     dimHuman,
     ctx,

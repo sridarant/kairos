@@ -33,16 +33,22 @@ function buildSummary(r, goldenTime, avoidTime) {
     : r.riskFlag === 'reduced'
     ? ' Favour conservative moves.'
     : ''
-  const culturalNote = `${r.planetLabel} ${r.planetInfluence}; today falls under ${r.nakshatraCultural} (${r.nakshatraLabel}).`
-  const birthNote = [
-    r.lagnaSign    ? `Lagna in ${r.lagnaSign}`   : '',
-    r.moonSignName ? `Moon in ${r.moonSignName}` : ''
-  ].filter(Boolean).join(', ')
-  const birthLine = birthNote ? ` ${birthNote} shapes your personal alignment.` : ''
+
+  // Dasha always included — one cultural anchor per summary
+  const dashaNote = `${r.dashaLabel} ${r.planetInfluence}; today falls under ${r.nakshatraCultural} (${r.nakshatraLabel}).`
+
+  // Birth layer: Lagna if personal reasoning needed, Rasi only for communication/emotion context
+  const birthParts = []
+  if (r.lagnaLabel)                                                         birthParts.push(r.lagnaLabel)
+  if (r.rasiLabel && ['communication', 'focus'].includes(r.dominant))       birthParts.push(r.rasiLabel)
+  const birthLine = birthParts.length > 0
+    ? ` ${birthParts.join(' and ')} shapes your personal alignment.`
+    : ''
+
   return (
     `Use your ${goldenTime} window for key decisions and important actions. ` +
     `Avoid starting new commitments after ${avoidTime}. ` +
-    `${culturalNote}${birthLine}${riskNote}${traitHint}`
+    `${dashaNote}${birthLine}${riskNote}${traitHint}`
   )
 }
 

@@ -66,7 +66,6 @@ function evaluate(slots, ctx) {
 function buildPrompt(result, r, ctx, question, context, profile) {
   const firstName = profile?.name ? profile.name.split(' ')[0] : null
 
-  // Deterministic action instruction based on decision
   const actionMap = {
     do:    `Proceed with ${ctx.verb} now`,
     wait:  `Hold for now — act during ${result.next_best || result.best_time}`,
@@ -84,41 +83,50 @@ function buildPrompt(result, r, ctx, question, context, profile) {
     ? `User tendency (weave in once, naturally): "${r.traitLines[0]}"`
     : ''
 
-  const birthContext = [
-    r.lagnaSign    ? `Lagna: ${r.lagnaSign}`         : '',
-    r.moonSignName ? `Moon sign: ${r.moonSignName}`  : ''
-  ].filter(Boolean).join(', ')
+  // Cultural term priority:
+  // Dasha — always include (1 reference)
+  // Lagna label — when personal reasoning needed (decision/career context)
+  // Rasi label  — when communication or emotion is the primary dimension
+  const culturalTerms = [`${r.dashaLabel} ${r.planetInfluence}`]
+  if (r.lagnaLabel && ['decision', 'work', 'career', 'general'].includes(ctx.label)) {
+    culturalTerms.push(`your ${r.lagnaLabel}`)
+  } else if (r.rasiLabel && ['communication', 'relationships'].includes(ctx.label)) {
+    culturalTerms.push(`your ${r.rasiLabel}`)
+  }
+  // Cap at 2 cultural references
+  const culturalLine = `Cultural context (use max 1–2, naturally, no "planet" word): ${culturalTerms.slice(0, 2).join('; ')}.`
 
   const nameLine = firstName
     ? `Open with "${firstName}, " then the action.`
     : 'Do not use a name.'
 
-  return `You are an actionable decision-support writer for Kairos v5.1.
+  return `You are an actionable decision-support writer for Kairos v6.1.
 
-FIXED VALUES — embed these exactly, do not invent alternatives:
+FIXED VALUES — embed exactly, do not alter:
 - decision: ${r.decision}
 - action:   ${action}
 - best_time: ${result.best_time}
 - avoid_time: ${result.avoid_time}
 - confidence: ${result.confidence}
 
-CONTEXT FOR MESSAGE BODY:
+CONTEXT:
 - Question: ${question}
 - Context type: ${ctx.label} (dimension: ${r.ctxHuman})
-- Planetary influence: ${r.planetLabel} — ${r.planetInfluence}
+- Dominant dimension: ${r.dimHuman}
 - Lunar: ${r.lunarPhase} — ${r.lunarLabel}
 - Nakshatra: ${r.nakshatraCultural}
-- Dominant dimension: ${r.dimHuman}
-- Birth profile: ${birthContext || 'not provided'}
 - Additional context: ${context || 'none'}
 ${traitHint ? `- ${traitHint}` : ''}
 
-STRUCTURE TO FOLLOW (combine into 1–2 natural sentences):
+CULTURAL TERMS:
+- ${culturalLine}
+
+STRUCTURE (combine into 1–2 natural sentences):
 1. Start with the action: "${action}."
-2. Add timing: mention ${result.best_time} as the best window; mention ${result.avoid_time} as what to avoid.
-3. Give one short reason referencing ${r.dimHuman} and ${r.planetLabel} (no "planet" word).
-${riskLine ? `4. ${riskLine}` : ''}
-${birthContext ? `5. If natural, weave in a brief reference to the ${r.lagnaSign || r.moonSignName || ''} influence.` : ''}
+2. Add timing: ${result.best_time} to act, ${result.avoid_time} to avoid.
+3. Give one short reason referencing ${r.dimHuman} and the Dasha cultural term naturally.
+4. Max 1 additional cultural term (Lagna or Rasi) if it adds clarity.
+${riskLine ? `5. ${riskLine}` : ''}
 ${nameLine}
 
 OUTPUT — strict JSON only, no markdown:
