@@ -1,6 +1,7 @@
 import {
   scoredSlots, buildSeed, buildTraits, getPlanet, getLunarPhase, getDayType,
-  dominantDimension, toConfidence, DIM_LABEL, buildReasoning
+  dominantDimension, toConfidence, DIM_LABEL, buildReasoning,
+  computeLagna, computeMoonSign
 } from './engine.js'
 
 const FALLBACK = {
@@ -70,12 +71,16 @@ function buildPrompt(result, r, question, context, profile) {
     ? `Address ${profile.name.split(' ')[0]} by first name once at the start.`
     : 'Do not use a name.'
 
-  // Pick the single most relevant trait line for personalisation
   const traitHint = r.traitLines && r.traitLines.length > 0
     ? `Personalisation hint (weave in naturally, once): "${r.traitLines[0]}"`
     : 'No personalisation hint.'
 
-  return `You are a decision-support message writer for Kairos v4.1.
+  const birthContext = [
+    r.lagnaSign    ? `Lagna: ${r.lagnaSign} — amplifies their natural ${r.lagnaSign} tendencies`   : '',
+    r.moonSignName ? `Moon sign: ${r.moonSignName} — colours their emotional decision layer` : ''
+  ].filter(Boolean).join('. ')
+
+  return `You are a decision-support message writer for Kairos v5.0.
 
 FIXED VALUES — do not change:
 - decision: ${result.decision}
@@ -91,6 +96,7 @@ INTERNAL REASONING — use to write the message:
 - Day archetype: ${r.dayTypeName} — ${r.dayTypeLabel}
 - Nakshatra: ${r.nakshatraCultural} — ${r.nakshatraLabel}
 - Dominant dimension: ${r.dimHuman}
+- Birth profile: ${birthContext || 'not provided'}
 - User context: ${context || 'none'}
 - Profile type: ${profile?.type || 'none'}
 
@@ -100,11 +106,11 @@ USER TRAIT:
 WRITING RULES:
 1. ${decisionGuide}
 2. Mention ${r.ctxHuman} naturally — not as a label.
-3. Reference the planetary influence using the format "${r.planetLabel}" once, naturally. Do not use the word "planet".
-4. Optionally include the nakshatra name (${r.nakshatraCultural}) if it adds meaning — keep it brief.
+3. Reference the planetary influence using "${r.planetLabel}" once, naturally. Do not use the word "planet".
+4. If lagna or moon sign is available, weave one brief reference naturally (e.g. "your ${r.lagnaSign || r.moonSignName || ''} nature").
 5. ${riskLine}
 6. ${nameInstruction}
-7. If a trait hint is given, include it naturally — do not quote it verbatim.
+7. If a trait hint is given, include it naturally — do not quote verbatim.
 8. 1–2 sentences max. Confident, human, specific.
 
 OUTPUT — strict JSON only, no markdown:
@@ -129,13 +135,15 @@ export default async function handler(req, res) {
     const dayType  = getDayType()
     const seed     = buildSeed(profile?.dob || null)
     const traits   = buildTraits(profile?.dob || null)
-    const slots    = scoredSlots(seed, planet, profile?.type || null, lunar, dayType, traits)
+    const lagna    = computeLagna(profile?.birth_time || null)
+    const moonSign = computeMoonSign(profile?.dob || null)
+    const slots    = scoredSlots(seed, planet, profile?.type || null, lunar, dayType, traits, lagna, moonSign)
     const ctx      = detectContext(question)
     const result   = evaluate(slots, ctx)
-    const dominant = dominantDimension(planet, lunar, traits)
+    const dominant = dominantDimension(planet, lunar, traits, lagna, moonSign)
 
     const reasoning = buildReasoning({
-      planet, lunar, dayType, traits, dominant,
+      planet, lunar, dayType, traits, lagna, moonSign, dominant,
       ctx:       ctx.primary,
       dimScore:  result.dimScore,
       riskScore: result.riskScore,
@@ -155,7 +163,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'claude-3-haiku-20240307',
-        max_tokens: 240,
+        max_tokens: 260,
         messages: [{ role: 'user', content: prompt }]
       })
     })
@@ -180,6 +188,8 @@ export default async function handler(req, res) {
       planet:      planet.name,
       lunar_phase: lunar.name,
       day_type:    dayType.name,
+      lagna:       lagna?.name    || null,
+      moon_sign:   moonSign?.name || null,
       context:     ctx.label
     })
   } catch {

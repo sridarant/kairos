@@ -1,6 +1,7 @@
 import {
   scoredSlots, buildSeed, buildTraits, getPlanet, getLunarPhase, getDayType,
-  toConfidence, dominantDimension, DIM_LABEL, PLANET_REASONING, buildReasoning
+  toConfidence, dominantDimension, DIM_LABEL, PLANET_REASONING, buildReasoning,
+  computeLagna, computeMoonSign
 } from './engine.js'
 
 const DO_MSGS = [
@@ -26,38 +27,43 @@ const WATCH_MSGS = [
 ]
 
 function buildSummary(r, goldenTime) {
-  // Pick the single most relevant trait line for the summary
   const traitHint = r.traitLines.length > 0 ? ` ${r.traitLines[0]}` : ''
   const riskNote  = r.riskFlag === 'elevated'
     ? ' Manage risk carefully.'
     : r.riskFlag === 'reduced'
     ? ' Favour conservative moves.'
     : ''
-  // Cultural layer: planet label + nakshatra, kept brief
   const culturalNote = `${r.planetLabel} ${r.planetInfluence}; today falls under ${r.nakshatraCultural} (${r.nakshatraLabel}).`
+  const birthNote = [
+    r.lagnaSign   ? `Lagna in ${r.lagnaSign}`   : '',
+    r.moonSignName ? `Moon in ${r.moonSignName}` : ''
+  ].filter(Boolean).join(', ')
+  const birthLine = birthNote ? ` ${birthNote} shapes your personal alignment today.` : ''
   return (
     `${goldenTime} is your strongest window — ${r.dimHuman} is heightened. ` +
-    `${culturalNote}${riskNote}${traitHint}`
+    `${culturalNote}${birthLine}${riskNote}${traitHint}`
   )
 }
 
 function computeForUser(user, planet, lunar, dayType) {
-  const seed   = buildSeed(user.dob)
-  const traits = buildTraits(user.dob)
-  const slots  = scoredSlots(seed, planet, user.type, lunar, dayType, traits)
-  const sorted = [...slots].sort((a, b) => b.score - a.score)
-  const golden = sorted[0]
-  const worst  = sorted[sorted.length - 1]
-  const medium = [...slots].sort((a, b) => Math.abs(a.score) - Math.abs(b.score))[0]
+  const seed     = buildSeed(user.dob)
+  const traits   = buildTraits(user.dob)
+  const lagna    = computeLagna(user.birth_time)
+  const moonSign = computeMoonSign(user.dob)
+  const slots    = scoredSlots(seed, planet, user.type, lunar, dayType, traits, lagna, moonSign)
+  const sorted   = [...slots].sort((a, b) => b.score - a.score)
+  const golden   = sorted[0]
+  const worst    = sorted[sorted.length - 1]
+  const medium   = [...slots].sort((a, b) => Math.abs(a.score) - Math.abs(b.score))[0]
 
-  const dominant   = dominantDimension(planet, lunar, traits)
+  const dominant   = dominantDimension(planet, lunar, traits, lagna, moonSign)
   const confidence = toConfidence(golden.score, worst.score)
 
   const reasoning = buildReasoning({
-    planet, lunar, dayType, traits,
+    planet, lunar, dayType, traits, lagna, moonSign,
     dominant,
     ctx:       dominant,
-    dimScore:  golden[dominant] ?? golden.dec,
+    dimScore:  golden[dominant] ?? golden.decision,
     riskScore: golden.risk,
     decision:  'do'
   })
@@ -66,6 +72,8 @@ function computeForUser(user, planet, lunar, dayType) {
     name:          user.name || 'You',
     golden_window: golden.time,
     avoid_window:  worst.time,
+    lagna:         lagna?.name    || null,
+    moon_sign:     moonSign?.name || null,
     summary:       buildSummary(reasoning, golden.time),
     do:            DO_MSGS[seed % DO_MSGS.length],
     avoid:         `${worst.time} — ` + AVOID_MSGS[(seed + 1) % AVOID_MSGS.length],
@@ -78,6 +86,8 @@ function computeForUser(user, planet, lunar, dayType) {
       dayType:         dayType.name,
       planetInfluence: PLANET_REASONING[planet.name],
       riskFlag:        reasoning.riskFlag,
+      lagna:           lagna?.name    || null,
+      moon_sign:       moonSign?.name || null,
       traits
     }
   }
@@ -89,7 +99,7 @@ export default function handler(req, res) {
   const body  = req.body || {}
   const users = Array.isArray(body.users) && body.users.length > 0
     ? body.users.slice(0, 3)
-    : [{ name: null, dob: null, type: null }]
+    : [{ name: null, dob: null, birth_time: null, type: null }]
 
   const planet  = getPlanet()
   const lunar   = getLunarPhase()

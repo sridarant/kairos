@@ -34,7 +34,6 @@ export const PLANET_REASONING = {
 }
 
 // ─── Cultural name maps ───────────────────────────────────────────────────────
-// Format used in explanation text: "Planet (Sanskrit / Tamil)"
 export const PLANET_CULTURAL = {
   Sun:     'Surya / சூரியன்',
   Moon:    'Chandra / சந்திரன்',
@@ -45,25 +44,22 @@ export const PLANET_CULTURAL = {
   Saturn:  'Shani / சனி'
 }
 
-// Nakshatra cycle (date % 9) — 9 nakshatras in rotation
-// Format: "Tamil / Sanskrit"
 const NAKSHATRAS = [
-  { name: 'Ashwini',    cultural: 'அஸ்வினி / Ashwini',       label: 'a swift, initiating nakshatra' },
-  { name: 'Bharani',    cultural: 'பரணி / Bharani',           label: 'a transformative, intense nakshatra' },
-  { name: 'Krittika',   cultural: 'கிருத்திகை / Krittika',   label: 'a sharp, purifying nakshatra' },
-  { name: 'Rohini',     cultural: 'ரோகிணி / Rohini',         label: 'a fertile, creative nakshatra' },
+  { name: 'Ashwini',    cultural: 'அஸ்வினி / Ashwini',         label: 'a swift, initiating nakshatra' },
+  { name: 'Bharani',    cultural: 'பரணி / Bharani',             label: 'a transformative, intense nakshatra' },
+  { name: 'Krittika',   cultural: 'கிருத்திகை / Krittika',     label: 'a sharp, purifying nakshatra' },
+  { name: 'Rohini',     cultural: 'ரோகிணி / Rohini',           label: 'a fertile, creative nakshatra' },
   { name: 'Mrigashira', cultural: 'மிருகசீரிடம் / Mrigashira', label: 'a curious, seeking nakshatra' },
-  { name: 'Ardra',      cultural: 'திருவாதிரை / Ardra',      label: 'a stormy, transformative nakshatra' },
-  { name: 'Punarvasu',  cultural: 'புனர்பூசம் / Punarvasu',  label: 'a returning, hopeful nakshatra' },
-  { name: 'Pushya',     cultural: 'பூசம் / Pushya',           label: 'a nourishing, auspicious nakshatra' },
-  { name: 'Ashlesha',   cultural: 'ஆயில்யம் / Ashlesha',     label: 'a penetrating, intuitive nakshatra' }
+  { name: 'Ardra',      cultural: 'திருவாதிரை / Ardra',        label: 'a stormy, transformative nakshatra' },
+  { name: 'Punarvasu',  cultural: 'புனர்பூசம் / Punarvasu',    label: 'a returning, hopeful nakshatra' },
+  { name: 'Pushya',     cultural: 'பூசம் / Pushya',             label: 'a nourishing, auspicious nakshatra' },
+  { name: 'Ashlesha',   cultural: 'ஆயில்யம் / Ashlesha',       label: 'a penetrating, intuitive nakshatra' }
 ]
 
 export function getNakshatra() {
   return NAKSHATRAS[new Date().getDate() % 9]
 }
 
-// Returns full planet label for use in explanation text
 export function planetLabel(planetName) {
   const cultural = PLANET_CULTURAL[planetName] || planetName
   return `${planetName} (${cultural})`
@@ -92,42 +88,77 @@ export function getDayType() {
 }
 
 // ─── Layer 4: User trait model ────────────────────────────────────────────────
-// Traits are derived deterministically from DOB day (or date as fallback).
-// Each trait is in range -1 to +1 and represents a stable behavioral tendency.
 export function buildTraits(dob) {
   const dobDay = dob
     ? parseInt((dob.split('-')[2] || dob.split('/')[1] || '0'), 10)
     : new Date().getDate()
-
-  // Each trait uses a different modular offset to ensure variety across users
-  const decision_bias       = ((dobDay % 3) - 1)          // -1, 0, +1
-  const risk_tolerance      = ((dobDay + 1) % 3) - 1      // -1, 0, +1 (offset)
-  const communication_style = (dobDay % 2)                 //  0, +1
-  const focus_strength      = (((dobDay + 2) % 3) - 1)    // -1, 0, +1 (offset)
-
-  return { decision_bias, risk_tolerance, communication_style, focus_strength }
+  return {
+    decision_bias:       ((dobDay % 3) - 1),
+    risk_tolerance:      (((dobDay + 1) % 3) - 1),
+    communication_style: (dobDay % 2),
+    focus_strength:      (((dobDay + 2) % 3) - 1)
+  }
 }
 
-// Trait narrative for Claude prompts — maps each trait value to a behaviour description
 export function traitNarrative(traits) {
   const lines = []
-
-  if (traits.decision_bias > 0)  lines.push('You tend to move quickly on decisions — lean into that today.')
-  if (traits.decision_bias < 0)  lines.push('You may overthink decisions — trust the data in front of you.')
+  if (traits.decision_bias > 0)   lines.push('You tend to move quickly on decisions — lean into that today.')
+  if (traits.decision_bias < 0)   lines.push('You may overthink decisions — trust the data in front of you.')
   if (traits.decision_bias === 0) lines.push('Your decision pace is balanced — timing matters more than speed.')
-
-  if (traits.risk_tolerance > 0)  lines.push('Your risk tolerance is naturally higher — weigh upsides carefully.')
-  if (traits.risk_tolerance < 0)  lines.push('You tend toward caution — that instinct is worth honouring today.')
+  if (traits.risk_tolerance > 0)   lines.push('Your risk tolerance is naturally higher — weigh upsides carefully.')
+  if (traits.risk_tolerance < 0)   lines.push('You tend toward caution — that instinct is worth honouring today.')
   if (traits.risk_tolerance === 0) lines.push('Your risk instincts are moderate — follow the signals.')
-
-  if (traits.communication_style > 0) lines.push('Your communication strength is high — use it.')
+  if (traits.communication_style > 0)  lines.push('Your communication strength is high — use it.')
   if (traits.communication_style === 0) lines.push('Communication takes more effort today — be deliberate.')
-
-  if (traits.focus_strength > 0)  lines.push('Your focus tends to be strong — protect your deep work time.')
-  if (traits.focus_strength < 0)  lines.push('Focus may be harder to hold today — work in shorter bursts.')
+  if (traits.focus_strength > 0)   lines.push('Your focus tends to be strong — protect your deep work time.')
+  if (traits.focus_strength < 0)   lines.push('Focus may be harder to hold today — work in shorter bursts.')
   if (traits.focus_strength === 0) lines.push('Focus is context-dependent for you — set the environment first.')
-
   return lines
+}
+
+// ─── Layer 5: Zodiac sign scoring ─────────────────────────────────────────────
+const ZODIAC = [
+  { name: 'Aries',       decision:  2, communication:  0, risk:  1, focus:  0 },
+  { name: 'Taurus',      decision:  0, communication:  0, risk:  0, focus:  1 },
+  { name: 'Gemini',      decision:  0, communication:  2, risk:  0, focus:  0 },
+  { name: 'Cancer',      decision:  0, communication:  0, risk:  1, focus:  0 },
+  { name: 'Leo',         decision:  1, communication:  0, risk:  0, focus:  0 },
+  { name: 'Virgo',       decision:  0, communication:  0, risk:  0, focus:  2 },
+  { name: 'Libra',       decision:  0, communication:  1, risk:  0, focus:  0 },
+  { name: 'Scorpio',     decision:  0, communication:  0, risk:  2, focus:  0 },
+  { name: 'Sagittarius', decision:  1, communication:  0, risk:  0, focus:  0 },
+  { name: 'Capricorn',   decision:  0, communication:  0, risk:  0, focus:  1 },
+  { name: 'Aquarius',    decision:  0, communication:  1, risk:  0, focus:  0 },
+  { name: 'Pisces',      decision:  0, communication:  0, risk:  0, focus:  1 }
+]
+
+// Lagna: derived from birth_time hour — stronger weight (factor 1.0)
+// Moon sign: derived from dob day — moderate weight (factor 0.5, rounded)
+export function computeLagna(birthTime) {
+  if (!birthTime) return null
+  const parts = birthTime.split(':')
+  const hour  = parseInt(parts[0], 10)
+  if (isNaN(hour)) return null
+  const idx = Math.floor(hour / 2) % 12
+  return { ...ZODIAC[idx], source: 'lagna' }
+}
+
+export function computeMoonSign(dob) {
+  if (!dob) return null
+  const dobDay = parseInt((dob.split('-')[2] || dob.split('/')[1] || '0'), 10)
+  if (!dobDay) return null
+  const idx = dobDay % 12
+  return { ...ZODIAC[idx], source: 'moon' }
+}
+
+// Apply zodiac impact to a mutable dims object
+// lagna: full weight; moon sign: half weight (rounded)
+function applyZodiac(dims, zodiac, weight) {
+  if (!zodiac) return
+  dims.decision      += Math.round(zodiac.decision      * weight)
+  dims.communication += Math.round(zodiac.communication * weight)
+  dims.risk          += Math.round(zodiac.risk          * weight)
+  dims.focus         += Math.round(zodiac.focus         * weight)
 }
 
 // ─── Human-readable dimension labels ─────────────────────────────────────────
@@ -138,7 +169,7 @@ export const DIM_LABEL = {
   risk:          'risk sensitivity'
 }
 
-// ─── User seed (for slot jitter, separate from trait seed) ───────────────────
+// ─── User seed ────────────────────────────────────────────────────────────────
 export function buildSeed(dob) {
   const dateNum = new Date().getDate()
   const dobDay  = dob ? parseInt((dob.split('-')[2] || dob.split('/')[1] || '0'), 10) : 0
@@ -149,48 +180,49 @@ export function buildSeed(dob) {
 function typeBoost(type) {
   if (!type) return { decision: 0, communication: 0, focus: 0 }
   const t = type.toLowerCase()
-  if (t.includes('work') || t.includes('entrepreneur'))
-    return { decision: 1, communication: 1, focus: 0 }
-  if (t.includes('student'))
-    return { decision: 0, communication: 0, focus: 1 }
-  if (t.includes('creative'))
-    return { decision: 0, communication: 1, focus: 1 }
+  if (t.includes('work') || t.includes('entrepreneur')) return { decision: 1, communication: 1, focus: 0 }
+  if (t.includes('student'))  return { decision: 0, communication: 0, focus: 1 }
+  if (t.includes('creative')) return { decision: 0, communication: 1, focus: 1 }
   return { decision: 0, communication: 0, focus: 0 }
 }
 
-// ─── Full stacked scoring (6 layers) ─────────────────────────────────────────
-// Order: base → planet → lunar → day type → user traits → profile type + jitter
-export function scoredSlots(seed, planet, type, lunar, dayType, traits) {
+// ─── Full stacked scoring (7 layers) ─────────────────────────────────────────
+// Order: base → planet → lunar → day type → user traits → lagna → moon sign → profile type + jitter
+export function scoredSlots(seed, planet, type, lunar, dayType, traits, lagna, moonSign) {
   const p  = planet  || getPlanet()
   const lu = lunar   || getLunarPhase()
   const dt = dayType || getDayType()
   const tb = typeBoost(type)
   const tr = traits  || { decision_bias: 0, risk_tolerance: 0, communication_style: 0, focus_strength: 0 }
 
-  const decAdj  = (seed % 3) - 1   // date-based jitter: -1, 0, +1
-  const commAdj = seed % 2          // date-based jitter: 0, +1
+  const decAdj  = (seed % 3) - 1
+  const commAdj = seed % 2
 
   return SLOTS.map(s => {
-    const dec   = s.decision      + p.decision      + lu.decision  + dt.decision      + tr.decision_bias      + decAdj  + tb.decision
-    const comm  = s.communication + p.communication                + dt.communication + tr.communication_style + commAdj + tb.communication
-    const risk  = s.risk          + p.risk          + lu.risk                         + tr.risk_tolerance
-    const focus = s.focus         + p.focus         + lu.focus                        + tr.focus_strength                + tb.focus
-    const score = dec + comm + focus - risk
-    return { ...s, dec, comm, risk, focus, score }
+    const dims = {
+      decision:      s.decision      + p.decision      + lu.decision  + dt.decision      + tr.decision_bias      + decAdj  + tb.decision,
+      communication: s.communication + p.communication                + dt.communication + tr.communication_style + commAdj + tb.communication,
+      risk:          s.risk          + p.risk          + lu.risk                         + tr.risk_tolerance,
+      focus:         s.focus         + p.focus         + lu.focus                        + tr.focus_strength                + tb.focus
+    }
+    applyZodiac(dims, lagna,    1.0)   // lagna: full weight
+    applyZodiac(dims, moonSign, 0.5)   // moon sign: half weight
+    const score = dims.decision + dims.communication + dims.focus - dims.risk
+    return { ...s, ...dims, score }
   })
 }
 
-// ─── Dominant dimension: planet + lunar + traits combined ─────────────────────
-export function dominantDimension(planet, lunar, traits) {
+// ─── Dominant dimension ───────────────────────────────────────────────────────
+export function dominantDimension(planet, lunar, traits, lagna, moonSign) {
   const p  = planet || getPlanet()
   const lu = lunar  || getLunarPhase()
   const tr = traits || { decision_bias: 0, risk_tolerance: 0, communication_style: 0, focus_strength: 0 }
 
   const combined = {
-    decision:      Math.abs(p.decision      + lu.decision  + tr.decision_bias),
-    communication: Math.abs(p.communication               + tr.communication_style),
-    focus:         Math.abs(p.focus         + lu.focus     + tr.focus_strength),
-    risk:          Math.abs(p.risk          + lu.risk      + tr.risk_tolerance)
+    decision:      Math.abs(p.decision      + lu.decision  + tr.decision_bias      + (lagna?.decision || 0) + Math.round((moonSign?.decision || 0) * 0.5)),
+    communication: Math.abs(p.communication               + tr.communication_style + (lagna?.communication || 0) + Math.round((moonSign?.communication || 0) * 0.5)),
+    focus:         Math.abs(p.focus         + lu.focus     + tr.focus_strength     + (lagna?.focus || 0) + Math.round((moonSign?.focus || 0) * 0.5)),
+    risk:          Math.abs(p.risk          + lu.risk      + tr.risk_tolerance     + (lagna?.risk || 0) + Math.round((moonSign?.risk || 0) * 0.5))
   }
   return Object.entries(combined).sort((a, b) => b[1] - a[1])[0][0]
 }
@@ -204,7 +236,7 @@ export function toConfidence(bestScore, worstScore) {
 }
 
 // ─── Reasoning builder ────────────────────────────────────────────────────────
-export function buildReasoning({ planet, lunar, dayType, dominant, ctx, dimScore, riskScore, decision, traits }) {
+export function buildReasoning({ planet, lunar, dayType, dominant, ctx, dimScore, riskScore, decision, traits, lagna, moonSign }) {
   const p  = planet  || getPlanet()
   const lu = lunar   || getLunarPhase()
   const dt = dayType || getDayType()
@@ -217,16 +249,18 @@ export function buildReasoning({ planet, lunar, dayType, dominant, ctx, dimScore
   const riskFlag  = riskScore >= 1 ? 'elevated' : riskScore <= -1 ? 'reduced' : 'neutral'
 
   return {
-    planet:           p.name,
-    planetLabel:      planetLabel(p.name),
+    planet:            p.name,
+    planetLabel:       planetLabel(p.name),
     planetInfluence,
-    lunarPhase:       lu.name,
-    lunarLabel:       lu.label,
-    dayTypeName:      dt.name,
-    dayTypeLabel:     dt.label,
-    nakshatraName:    nk.name,
+    lunarPhase:        lu.name,
+    lunarLabel:        lu.label,
+    dayTypeName:       dt.name,
+    dayTypeLabel:      dt.label,
+    nakshatraName:     nk.name,
     nakshatraCultural: nk.cultural,
-    nakshatraLabel:   nk.label,
+    nakshatraLabel:    nk.label,
+    lagnaSign:         lagna?.name     || null,
+    moonSignName:      moonSign?.name  || null,
     dominant,
     dimHuman,
     ctx,
@@ -236,7 +270,7 @@ export function buildReasoning({ planet, lunar, dayType, dominant, ctx, dimScore
     riskFlag,
     alignedWithPlanet: dominant === ctx,
     decision,
-    traits:           tr,
-    traitLines:       traitNarrative(tr)
+    traits:            tr,
+    traitLines:        traitNarrative(tr)
   }
 }

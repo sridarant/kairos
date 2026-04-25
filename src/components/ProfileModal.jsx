@@ -4,7 +4,7 @@ const MAX_MEMBERS = 3
 
 export default function ProfileModal({ onClose, users, onSave }) {
   const [list, setList] = useState(
-    users.length > 0 ? users : [{ name: '', dob: '', type: '' }]
+    users.length > 0 ? users : [{ name: '', dob: '', birth_time: '', type: '' }]
   )
 
   function update(i, field, val) {
@@ -13,7 +13,7 @@ export default function ProfileModal({ onClose, users, onSave }) {
 
   function addMember() {
     if (list.length >= MAX_MEMBERS) return
-    setList(prev => [...prev, { name: '', dob: '', type: '' }])
+    setList(prev => [...prev, { name: '', dob: '', birth_time: '', type: '' }])
   }
 
   function removeMember(i) {
@@ -78,6 +78,11 @@ export default function ProfileModal({ onClose, users, onSave }) {
                   <span style={label}>Date of Birth (optional)</span>
                   <input value={u.dob} onChange={e => update(i, 'dob', e.target.value)}
                     placeholder="DD-MM-YYYY" style={input} />
+                </div>
+                <div>
+                  <span style={label}>Birth Time (optional — for Lagna)</span>
+                  <input value={u.birth_time} onChange={e => update(i, 'birth_time', e.target.value)}
+                    placeholder="HH:MM (e.g. 06:30)" style={input} />
                 </div>
                 <div>
                   <span style={label}>Type (optional)</span>
