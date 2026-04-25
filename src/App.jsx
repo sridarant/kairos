@@ -6,26 +6,28 @@ import BottomNav from './components/BottomNav'
 
 const MOCK_DAILY = {
   golden_window: '09:00–11:00',
+  avoid_window: '17:00–19:00',
   do: 'Tackle complex work requiring full focus',
   avoid: '17:00–19:00 — Avoid financial decisions — risk tolerance is low',
   watch: '13:00–15:00 — Energy dip likely — pace yourself',
-  confidence_summary: 75
+  planet: 'Mercury',
+  confidence_summary: 75,
+  members: []
 }
 
 function loadUsers() {
   try { return JSON.parse(localStorage.getItem('kairos_users') || '[]') } catch { return [] }
 }
-
 function saveUsers(users) {
   try { localStorage.setItem('kairos_users', JSON.stringify(users)) } catch {}
 }
 
 export default function App() {
-  const [daily, setDaily]           = useState(null)
-  const [loading, setLoading]       = useState(true)
-  const [askOpen, setAskOpen]       = useState(false)
+  const [daily, setDaily]             = useState(null)
+  const [loading, setLoading]         = useState(true)
+  const [askOpen, setAskOpen]         = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
-  const [users, setUsers]           = useState(loadUsers)
+  const [users, setUsers]             = useState(loadUsers)
 
   useEffect(() => { fetchDaily(users) }, [])
 
@@ -63,7 +65,7 @@ export default function App() {
         onProfileOpen={() => setProfileOpen(true)}
       />
       <BottomNav onAsk={() => setAskOpen(true)} onProfile={() => setProfileOpen(true)} />
-      {askOpen    && <AskModal onClose={() => setAskOpen(false)} profile={primaryUser} />}
+      {askOpen     && <AskModal onClose={() => setAskOpen(false)} profile={primaryUser} />}
       {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} users={users} onSave={handleSaveUsers} />}
     </div>
   )

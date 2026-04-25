@@ -1,50 +1,7 @@
-export const SLOTS = [
-  { time: '07:00–09:00', decision: 1,  communication: 1,  risk: 0,  focus: 1  },
-  { time: '09:00–11:00', decision: 2,  communication: 2,  risk: 0,  focus: 2  },
-  { time: '11:00–13:00', decision: 1,  communication: 2,  risk: 0,  focus: 1  },
-  { time: '13:00–15:00', decision: 0,  communication: -1, risk: -1, focus: 0  },
-  { time: '15:00–17:00', decision: -1, communication: -2, risk: -1, focus: -1 },
-  { time: '17:00–19:00', decision: -2, communication: -1, risk: -2, focus: -1 }
-]
-
-// Deterministic seed from date + optional DOB day
-export function buildSeed(dob) {
-  const today = new Date()
-  const dateNum = today.getDate()
-  const dobDay = dob ? parseInt((dob.split('-')[2] || dob.split('/')[1] || '0'), 10) : 0
-  return dateNum + (dobDay || 0)
-}
-
-export function scoredSlots(seed) {
-  return SLOTS.map(s => {
-    const decAdj  = (seed % 3) - 1        // -1, 0, or +1
-    const commAdj = (seed % 2)             //  0 or +1
-    const score   = (s.decision + decAdj) + (s.communication + commAdj) + s.focus - s.risk
-    return { ...s, score }
-  })
-}
-
-const SUMMARIES = [
-  'Strong window for decisions and deep work.',
-  'Good momentum — act on what matters most.',
-  'Favourable conditions for key conversations.',
-  'Moderate energy — pace yourself today.',
-  'Lower clarity window — rest and reflect.',
-  'Best used for review, not new commitments.'
-]
-
-function memberData(name, dob) {
-  const seed  = buildSeed(dob)
-  const slots = scoredSlots(seed)
-  const sorted = [...slots].sort((a, b) => b.score - a.score)
-  const golden = sorted[0]
-  const summaryIdx = Math.abs(seed) % SUMMARIES.length
-  return {
-    name,
-    golden_window: golden.time,
-    summary: SUMMARIES[summaryIdx]
-  }
-}
+import {
+  scoredSlots, buildSeed, getPlanet, getLunarPhase, getDayType,
+  toConfidence, dominantDimension, DIM_LABEL, PLANET_REASONING, buildReasoning
+} from './engine.js'
 
 const DO_MSGS = [
   'Make important decisions and have key conversations',
@@ -68,32 +25,87 @@ const WATCH_MSGS = [
   'Stress peaks around context-switching'
 ]
 
-export default function handler(req, res) {
-  if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).end()
+function buildSummary(r, goldenTime) {
+  const riskNote = r.riskFlag === 'elevated'
+    ? ' Manage risk carefully during this window.'
+    : r.riskFlag === 'reduced'
+    ? ' Favour conservative moves — risk appetite is low.'
+    : ''
+  return (
+    `${goldenTime} is your strongest window today. ` +
+    `${r.dimHuman} is heightened — ${r.planetInfluence}, ` +
+    `the ${r.lunarLabel}, and it's ${r.dayTypeLabel}.${riskNote}`
+  )
+}
 
-  // Primary user from query or body
-  const body    = req.body || {}
-  const users   = Array.isArray(body.users) ? body.users.slice(0, 3) : []
-  const primary = users[0] || { name: null, dob: null }
-
-  const seed  = buildSeed(primary.dob)
-  const slots = scoredSlots(seed)
+function computeForUser(user, planet, lunar, dayType) {
+  const seed   = buildSeed(user.dob)
+  const slots  = scoredSlots(seed, planet, user.type, lunar, dayType)
   const sorted = [...slots].sort((a, b) => b.score - a.score)
   const golden = sorted[0]
   const worst  = sorted[sorted.length - 1]
   const medium = [...slots].sort((a, b) => Math.abs(a.score) - Math.abs(b.score))[0]
-  const confidence = Math.min(100, Math.max(0, Math.round(((golden.score + 6) / 12) * 100)))
 
-  const members = users.length > 0
-    ? users.map(u => memberData(u.name || 'You', u.dob || null))
-    : null
+  const dominant   = dominantDimension(planet, lunar)
+  const confidence = toConfidence(golden.score, worst.score)
+
+  const reasoning = buildReasoning({
+    planet, lunar, dayType,
+    dominant,
+    ctx:      dominant,
+    dimScore: golden[dominant] ?? golden.dec,
+    riskScore: golden.risk,
+    decision: 'do'
+  })
+
+  return {
+    name:          user.name || 'You',
+    golden_window: golden.time,
+    avoid_window:  worst.time,
+    summary:       buildSummary(reasoning, golden.time),
+    do:            DO_MSGS[seed % DO_MSGS.length],
+    avoid:         `${worst.time} — ` + AVOID_MSGS[(seed + 1) % AVOID_MSGS.length],
+    watch:         `${medium.time} — ` + WATCH_MSGS[(seed + 2) % WATCH_MSGS.length],
+    confidence,
+    _reasoning: {
+      dominant,
+      planet:      planet.name,
+      lunarPhase:  lunar.name,
+      dayType:     dayType.name,
+      planetInfluence: PLANET_REASONING[planet.name],
+      riskFlag:    reasoning.riskFlag
+    }
+  }
+}
+
+export default function handler(req, res) {
+  if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).end()
+
+  const body  = req.body || {}
+  const users = Array.isArray(body.users) && body.users.length > 0
+    ? body.users.slice(0, 3)
+    : [{ name: null, dob: null, type: null }]
+
+  const planet  = getPlanet()
+  const lunar   = getLunarPhase()
+  const dayType = getDayType()
+  const members = users.map(u => computeForUser(u, planet, lunar, dayType))
+  const primary = members[0]
+
+  const avgConfidence = Math.round(
+    members.reduce((s, m) => s + m.confidence, 0) / members.length
+  )
 
   res.status(200).json({
-    golden_window:      golden.time,
-    do:                 DO_MSGS[seed % DO_MSGS.length],
-    avoid:              `${worst.time} — ` + AVOID_MSGS[(seed + 1) % AVOID_MSGS.length],
-    watch:              `${medium.time} — ` + WATCH_MSGS[(seed + 2) % WATCH_MSGS.length],
-    confidence_summary: confidence,
-    ...(members ? { members } : {})
+    golden_window:      primary.golden_window,
+    avoid_window:       primary.avoid_window,
+    do:                 primary.do,
+    avoid:              primary.avoid,
+    watch:              primary.watch,
+    planet:             planet.name,
+    lunar_phase:        lunar.name,
+    day_type:           dayType.name,
+    confidence_summary: avgConfidence,
+    members
   })
 }
