@@ -1,7 +1,9 @@
 import {
   scoredSlots, buildSeed, buildTraits, getPlanet, getLunarPhase, getDayType,
   dominantDimension, toConfidence, DIM_LABEL, buildReasoning,
-  computeLagna, computeMoonSign
+  computeLagna, computeMoonSign,
+  getTransits, aggregateTransits, dominantTransit,
+  getTithi, getNakshatra, getVara
 } from './engine.js'
 
 const FALLBACK = {
@@ -15,22 +17,21 @@ const FALLBACK = {
 function detectContext(question) {
   const q = question.toLowerCase()
   if (/career|job|work|boss|colleague|project|deadline|client|office|promotion|resign|hire|fired|salary raise/.test(q))
-    return { primary: 'decision', secondary: 'communication', label: 'career', verb: 'act on this career matter' }
+    return { primary: 'decision', secondary: 'communication', label: 'work',          verb: 'act on this career matter' }
   if (/money|invest|financial|fund|budget|cost|price|loan|debt|stock|savings|purchase|buy|spend/.test(q))
-    return { primary: 'risk', secondary: 'decision', label: 'money', verb: 'make this financial move' }
+    return { primary: 'risk',     secondary: 'decision',      label: 'money',         verb: 'make this financial move' }
   if (/study|learn|course|skill|read|practice|train|exam|school|university|research|focus/.test(q))
-    return { primary: 'focus', secondary: 'decision', label: 'learning', verb: 'pursue this learning goal' }
+    return { primary: 'focus',    secondary: 'decision',      label: 'learning',      verb: 'pursue this learning goal' }
   if (/health|doctor|medicine|exercise|diet|sleep|wellness|body|symptom|appointment/.test(q))
-    return { primary: 'focus', secondary: 'decision', label: 'health', verb: 'act on this health matter' }
+    return { primary: 'focus',    secondary: 'decision',      label: 'health',        verb: 'act on this health matter' }
   if (/talk|meeting|conversation|discuss|call|message|relationship|friend|family|partner|conflict/.test(q))
-    return { primary: 'communication', secondary: 'focus', label: 'relationships', verb: 'have this conversation' }
-  return { primary: 'decision', secondary: 'communication', label: 'general', verb: 'proceed with this decision' }
+    return { primary: 'communication', secondary: 'focus',   label: 'relationships', verb: 'have this conversation' }
+  return   { primary: 'decision', secondary: 'communication', label: 'general',       verb: 'proceed with this decision' }
 }
 
 function evaluate(slots, ctx) {
   const sorted  = [...slots].sort((a, b) => b.score - a.score)
   const best    = sorted[0]
-  const second  = sorted[1]
   const worst   = sorted[sorted.length - 1]
 
   const hour    = new Date().getHours()
@@ -47,17 +48,16 @@ function evaluate(slots, ctx) {
   else if (riskScore <= -1 || dimScore <= -1) decision = 'avoid'
   else                                         decision = 'wait'
 
-  // For WAIT: surface the next best window that isn't the current one
   const nextBest = decision === 'wait'
     ? (sorted.find(s => s.time !== current.time) || best)
     : null
 
   return {
     decision,
-    best_time:   best.time,
-    avoid_time:  worst.time,
-    next_best:   nextBest?.time || null,
-    confidence:  toConfidence(best.score, worst.score),
+    best_time:  best.time,
+    avoid_time: worst.time,
+    next_best:  nextBest?.time || null,
+    confidence: toConfidence(best.score, worst.score),
     dimScore,
     riskScore
   }
@@ -83,49 +83,50 @@ function buildPrompt(result, r, ctx, question, context, profile) {
     ? `User tendency (weave in once, naturally): "${r.traitLines[0]}"`
     : ''
 
-  // Cultural term priority:
-  // Dasha — always include (1 reference)
-  // Lagna label — when personal reasoning needed (decision/career context)
-  // Rasi label  — when communication or emotion is the primary dimension
+  // Cultural terms: Dasha always; transit if active; Lagna or Rasi by context
   const culturalTerms = [`${r.dashaLabel} ${r.planetInfluence}`]
+  if (r.transitLabel) culturalTerms.push(`active transit: ${r.transitLabel}`)
   if (r.lagnaLabel && ['decision', 'work', 'career', 'general'].includes(ctx.label)) {
     culturalTerms.push(`your ${r.lagnaLabel}`)
   } else if (r.rasiLabel && ['communication', 'relationships'].includes(ctx.label)) {
     culturalTerms.push(`your ${r.rasiLabel}`)
   }
-  // Cap at 2 cultural references
-  const culturalLine = `Cultural context (use max 1–2, naturally, no "planet" word): ${culturalTerms.slice(0, 2).join('; ')}.`
 
-  const nameLine = firstName
-    ? `Open with "${firstName}, " then the action.`
-    : 'Do not use a name.'
+  const culturalLine = `Cultural context (use max 2, naturally, no "planet" word): ${culturalTerms.slice(0, 2).join('; ')}.`
+  const nameLine = firstName ? `Open with "${firstName}, " then the action.` : 'Do not use a name.'
 
-  return `You are an actionable decision-support writer for Kairos v6.1.
+  return `You are an actionable decision-support writer for Kairos v8.0.
 
-FIXED VALUES — embed exactly, do not alter:
+FIXED VALUES — embed exactly:
 - decision: ${r.decision}
 - action:   ${action}
 - best_time: ${result.best_time}
 - avoid_time: ${result.avoid_time}
 - confidence: ${result.confidence}
 
-CONTEXT:
+PANCHANG CONTEXT (today's astrological structure):
+- Vara: ${r.varaCultural} — ${r.varaLabel}
+- Tithi ${r.tithi}: ${r.tithiLabel}
+- Nakshatra: ${r.nakshatraCultural} — ${r.nakshatraLabel}
+
+ADDITIONAL CONTEXT:
 - Question: ${question}
 - Context type: ${ctx.label} (dimension: ${r.ctxHuman})
 - Dominant dimension: ${r.dimHuman}
-- Lunar: ${r.lunarPhase} — ${r.lunarLabel}
-- Nakshatra: ${r.nakshatraCultural}
+- Dasha: ${r.dashaLabel} — ${r.planetInfluence}
+- Lunar: ${r.lunarPhase}
+${r.transitLabel ? `- Active transit: ${r.transitLabel}` : ''}
 - Additional context: ${context || 'none'}
 ${traitHint ? `- ${traitHint}` : ''}
 
 CULTURAL TERMS:
 - ${culturalLine}
 
-STRUCTURE (combine into 1–2 natural sentences):
+STRUCTURE (1–2 natural sentences):
 1. Start with the action: "${action}."
 2. Add timing: ${result.best_time} to act, ${result.avoid_time} to avoid.
-3. Give one short reason referencing ${r.dimHuman} and the Dasha cultural term naturally.
-4. Max 1 additional cultural term (Lagna or Rasi) if it adds clarity.
+3. One short reason referencing ${r.dimHuman} — use the Vara or Nakshatra as the astrological anchor (e.g. "${r.varaName} Vara" or "${r.nakshatraName}").
+4. Max 1 additional cultural term (Dasha, Lagna, or transit) if it adds clarity.
 ${riskLine ? `5. ${riskLine}` : ''}
 ${nameLine}
 
@@ -142,24 +143,43 @@ OUTPUT — strict JSON only, no markdown:
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { question, context, profile } = req.body || {}
+  const { question, context, profile, feedbackAdj } = req.body || {}
   if (!question) return res.status(400).json(FALLBACK)
 
+  // Safely extract feedback adjustments sent from frontend localStorage
+  const fbDecBias = (feedbackAdj?.decisionBias   || 0)
+  const fbRiskAdj = (feedbackAdj?.riskAdj         || 0)
+  const fbConfMul = (feedbackAdj?.confidenceMultiplier || 1)
+
   try {
-    const planet   = getPlanet()
-    const lunar    = getLunarPhase()
-    const dayType  = getDayType()
-    const seed     = buildSeed(profile?.dob || null)
-    const traits   = buildTraits(profile?.dob || null)
-    const lagna    = computeLagna(profile?.birth_time || null)
-    const moonSign = computeMoonSign(profile?.dob || null)
-    const slots    = scoredSlots(seed, planet, profile?.type || null, lunar, dayType, traits, lagna, moonSign)
-    const ctx      = detectContext(question)
-    const result   = evaluate(slots, ctx)
-    const dominant = dominantDimension(planet, lunar, traits, lagna, moonSign)
+    const planet       = getPlanet()
+    const lunar        = getLunarPhase()
+    const dayType      = getDayType()
+    const seed         = buildSeed(profile?.dob || null)
+    const rawTraits    = buildTraits(profile?.dob || null)
+    // Merge feedback adjustments into traits so they flow through the full engine
+    const traits = {
+      ...rawTraits,
+      decision_bias:  rawTraits.decision_bias  + fbDecBias,
+      risk_tolerance: rawTraits.risk_tolerance + fbRiskAdj
+    }
+    const lagna        = computeLagna(profile?.birth_time || null)
+    const moonSign     = computeMoonSign(profile?.dob || null)
+    const transits     = getTransits()
+    const transitDelta = aggregateTransits(transits, lagna, moonSign)
+    const domTransit   = dominantTransit(transits)
+    const slots        = scoredSlots(seed, planet, profile?.type || null, lunar, dayType, traits, lagna, moonSign, transitDelta)
+    const ctx          = detectContext(question)
+    const result       = evaluate(slots, ctx)
+    const dominant     = dominantDimension(planet, lunar, traits, lagna, moonSign, transitDelta)
+
+    // Apply confidence multiplier from feedback history
+    const adjustedConfidence = Math.min(92, Math.max(10, Math.round(result.confidence * fbConfMul)))
 
     const reasoning = buildReasoning({
-      planet, lunar, dayType, traits, lagna, moonSign, dominant,
+      planet, lunar, dayType, traits, lagna, moonSign,
+      transitInfo: domTransit,
+      dominant,
       ctx:       ctx.primary,
       dimScore:  result.dimScore,
       riskScore: result.riskScore,
@@ -168,7 +188,9 @@ export default async function handler(req, res) {
     reasoning.ctxHuman = DIM_LABEL[ctx.primary] || ctx.primary
     reasoning.dimHuman = DIM_LABEL[dominant]     || dominant
 
-    const prompt = buildPrompt(result, reasoning, ctx, question, context, profile)
+    // Use adjusted confidence throughout prompt and response
+    const resultWithAdj = { ...result, confidence: adjustedConfidence }
+    const prompt = buildPrompt(resultWithAdj, reasoning, ctx, question, context, profile)
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -201,12 +223,15 @@ export default async function handler(req, res) {
       avoid_time:  result.avoid_time,
       next_best:   result.next_best,
       message:     json.message,
-      confidence:  result.confidence,
+      confidence:  adjustedConfidence,
       planet:      planet.name,
       lunar_phase: lunar.name,
-      day_type:    dayType.name,
+      vara:        planet.name,   // Vara IS the weekday planet
+      tithi:       getTithi().tithi,
+      nakshatra:   getNakshatra().name,
       lagna:       lagna?.name    || null,
       moon_sign:   moonSign?.name || null,
+      transit:     domTransit ? { planet: domTransit.planet, sign: domTransit.sign } : null,
       context:     ctx.label
     })
   } catch {

@@ -56,8 +56,73 @@ const NAKSHATRAS = [
   { name: 'Ashlesha',   cultural: 'ஆயில்யம் / Ashlesha',       label: 'a penetrating, intuitive nakshatra' }
 ]
 
+// ─── Full 27 Nakshatra system ─────────────────────────────────────────────────
+const NAKSHATRAS_27 = [
+  { name: 'Ashwini',    cultural: 'அஸ்வினி / Ashwini',         label: 'swift and initiating',      decision:  2, communication:  0, risk:  0, focus:  0 },
+  { name: 'Bharani',    cultural: 'பரணி / Bharani',             label: 'transformative and intense', decision:  1, communication:  0, risk:  1, focus:  0 },
+  { name: 'Krittika',   cultural: 'கிருத்திகை / Krittika',     label: 'sharp and purifying',        decision:  1, communication:  0, risk:  0, focus:  1 },
+  { name: 'Rohini',     cultural: 'ரோகிணி / Rohini',           label: 'fertile and creative',       decision:  0, communication:  1, risk:  0, focus:  1 },
+  { name: 'Mrigashira', cultural: 'மிருகசீரிடம் / Mrigashira', label: 'curious and seeking',        decision:  0, communication:  2, risk:  0, focus:  0 },
+  { name: 'Ardra',      cultural: 'திருவாதிரை / Ardra',        label: 'stormy and instability',     decision:  0, communication:  0, risk:  2, focus:  0 },
+  { name: 'Punarvasu',  cultural: 'புனர்பூசம் / Punarvasu',    label: 'returning and hopeful',      decision:  1, communication:  0, risk: -1, focus:  0 },
+  { name: 'Pushya',     cultural: 'பூசம் / Pushya',             label: 'nourishing and stable',      decision:  1, communication:  0, risk: -1, focus:  1 },
+  { name: 'Ashlesha',   cultural: 'ஆயில்யம் / Ashlesha',       label: 'penetrating and intuitive',  decision:  0, communication:  0, risk:  1, focus:  1 },
+  { name: 'Magha',      cultural: 'மகம் / Magha',               label: 'regal and authoritative',    decision:  2, communication:  0, risk:  0, focus:  0 },
+  { name: 'Purva Phalguni', cultural: 'பூரம் / Purva Phalguni', label: 'pleasurable and creative',  decision:  0, communication:  1, risk:  0, focus:  1 },
+  { name: 'Uttara Phalguni', cultural: 'உத்திரம் / Uttara Phalguni', label: 'reliable and generous', decision: 1, communication:  1, risk:  0, focus:  0 },
+  { name: 'Hasta',      cultural: 'அஸ்தம் / Hasta',             label: 'skilled and dexterous',      decision:  0, communication:  1, risk:  0, focus:  2 },
+  { name: 'Chitra',     cultural: 'சித்திரை / Chitra',         label: 'brilliant and creative',     decision:  0, communication:  2, risk:  0, focus:  0 },
+  { name: 'Swati',      cultural: 'சுவாதி / Swati',             label: 'independent and dispersive', decision:  0, communication:  1, risk:  1, focus: -1 },
+  { name: 'Vishakha',   cultural: 'விசாகம் / Vishakha',         label: 'purposeful and ambitious',   decision:  2, communication:  0, risk:  0, focus:  0 },
+  { name: 'Anuradha',   cultural: 'அனுஷம் / Anuradha',         label: 'devoted and cooperative',    decision:  0, communication:  1, risk:  0, focus:  1 },
+  { name: 'Jyeshtha',   cultural: 'கேட்டை / Jyeshtha',         label: 'powerful and intense',       decision:  1, communication:  0, risk:  1, focus:  0 },
+  { name: 'Mula',       cultural: 'மூலம் / Mula',               label: 'investigative and uprooting',decision: -1, communication:  0, risk:  2, focus:  0 },
+  { name: 'Purva Ashadha', cultural: 'பூராடம் / Purva Ashadha', label: 'invincible and purifying',  decision:  1, communication:  0, risk:  0, focus:  1 },
+  { name: 'Uttara Ashadha', cultural: 'உத்திராடம் / Uttara Ashadha', label: 'victorious and unwavering', decision: 2, communication: 0, risk: 0, focus: 0 },
+  { name: 'Shravana',   cultural: 'திருவோணம் / Shravana',      label: 'listening and connecting',   decision:  0, communication:  2, risk:  0, focus:  1 },
+  { name: 'Dhanishta',  cultural: 'அவிட்டம் / Dhanishta',      label: 'wealthy and musical',        decision:  0, communication:  1, risk:  0, focus:  1 },
+  { name: 'Shatabhisha', cultural: 'சதயம் / Shatabhisha',      label: 'healing and secretive',      decision:  0, communication:  0, risk:  0, focus:  2 },
+  { name: 'Purva Bhadra', cultural: 'பூரட்டாதி / Purva Bhadra', label: 'fierce and transforming',   decision:  1, communication:  0, risk:  1, focus:  0 },
+  { name: 'Uttara Bhadra', cultural: 'உத்திரட்டாதி / Uttara Bhadra', label: 'deep and stabilising', decision: 0, communication:  0, risk:  0, focus:  2 },
+  { name: 'Revati',     cultural: 'ரேவதி / Revati',             label: 'nurturing and transcendent', decision:  0, communication:  1, risk: -1, focus:  1 }
+]
+
 export function getNakshatra() {
-  return NAKSHATRAS[new Date().getDate() % 9]
+  const doy = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000)
+  return NAKSHATRAS_27[doy % 27]
+}
+
+// ─── Tithi (lunar day 1–30) ───────────────────────────────────────────────────
+export function getTithi() {
+  const doy   = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000)
+  const tithi = (doy % 30) + 1   // 1–30
+  let phase, delta, label
+  if (tithi <= 5)  { phase = 'Pratipada'; delta = { decision:  1, focus:  0, risk:  0 }; label = 'early lunar phase — favourable for new beginnings' }
+  else if (tithi <= 10) { phase = 'Panchami'; delta = { decision:  0, focus:  1, risk:  0 }; label = 'growth phase — build and expand' }
+  else if (tithi <= 15) { phase = 'Dashami'; delta = { decision:  2, focus:  0, risk:  0 }; label = 'peak phase — full energy for decisive action' }
+  else if (tithi <= 20) { phase = 'Amavasya approach'; delta = { decision:  0, focus:  0, risk:  1 }; label = 'declining phase — caution and review' }
+  else               { phase = 'Closing'; delta = { decision: -1, focus:  0, risk:  0 }; label = 'closure phase — complete, do not begin' }
+  return { tithi, phase, delta, label }
+}
+
+// ─── Vara (weekday planet mapping) ───────────────────────────────────────────
+// Replaces generic Day Type — Vara is the authentic Panchang weekday ruler
+const VARA_MAP = ['Sun','Moon','Mars','Mercury','Jupiter','Venus','Saturn']
+
+export function getVara() {
+  const planetName = VARA_MAP[new Date().getDay()]
+  const planet = PLANETS.find(p => p.name === planetName) || PLANETS[0]
+  const cultural = PLANET_CULTURAL[planetName] || planetName
+  return {
+    name:     planetName,
+    cultural: `${planetName} (${cultural})`,
+    // Vara applies same dimension deltas as the planet itself
+    decision:      planet.decision,
+    communication: planet.communication,
+    risk:          planet.risk,
+    focus:         planet.focus,
+    label: `${planetName} Vara — ${PLANET_REASONING[planetName] || 'a focused day'}`
+  }
 }
 
 export function planetLabel(planetName) {
@@ -65,7 +130,7 @@ export function planetLabel(planetName) {
   return `${planetName} (${cultural})`
 }
 
-// ─── Layer 2: Lunar phase ─────────────────────────────────────────────────────
+// ─── Layer 2: Lunar phase (kept for compatibility) ────────────────────────────
 export function getLunarPhase() {
   const phase = new Date().getDate() % 30
   if (phase <= 7)  return { name: 'Waxing', decision:  1, focus:  0, risk:  0, label: 'waxing moon lifts initiative' }
@@ -74,17 +139,10 @@ export function getLunarPhase() {
   return            { name: 'Dark',   decision: -1, focus: -1, risk:  0, label: 'dark moon calls for rest, not action' }
 }
 
-// ─── Layer 3: Day type (nakshatra-style) ──────────────────────────────────────
-const DAY_TYPES = [
-  { name: 'Initiate',    decision:  1, communication:  0, risk:  0, focus:  0, label: 'an Initiate day — ideal for starting things' },
-  { name: 'Build',       decision:  0, communication:  0, risk:  0, focus:  1, label: 'a Build day — sustained effort is rewarded' },
-  { name: 'Communicate', decision:  0, communication:  2, risk:  0, focus:  0, label: 'a Communicate day — conversations carry extra weight' },
-  { name: 'Reflect',     decision:  0, communication:  0, risk:  0, focus:  2, label: 'a Reflect day — deep thinking over quick action' },
-  { name: 'Restrict',    decision: -2, communication:  0, risk:  1, focus:  0, label: 'a Restrict day — avoid major decisions; review instead' }
-]
-
+// ─── Layer 3: Day type — replaced by Vara (Panchang weekday ruler) ───────────
+// getDayType kept as alias so existing callers don't break; returns Vara instead
 export function getDayType() {
-  return DAY_TYPES[new Date().getDate() % 5]
+  return getVara()
 }
 
 // ─── Layer 4: User trait model ────────────────────────────────────────────────
@@ -198,6 +256,113 @@ function applyZodiac(dims, zodiac, weight) {
   dims.focus         += Math.round(zodiac.focus         * weight)
 }
 
+// ─── Layer 6: Planetary transit simulation ────────────────────────────────────
+// Each planet moves through 12 signs at its own speed (days per full cycle).
+// position = floor(dayOfYear / speed) % 12 → zodiac index
+// This is deterministic: same date = same transit for all users.
+
+const TRANSIT_SPEEDS = {
+  Sun:     30,
+  Moon:    2,
+  Mars:    45,
+  Mercury: 25,
+  Jupiter: 365,
+  Venus:   27,
+  Saturn:  900
+}
+
+// Transit impact table: each planet's scoring in each zodiac sign.
+// Only signs with notable impact are listed; others return null (no impact).
+const TRANSIT_IMPACTS = {
+  Sun: {
+    Aries: { decision: 2, communication: 0, risk: 1, focus: 0 },
+    Leo:   { decision: 2, communication: 0, risk: 0, focus: 0 }
+  },
+  Moon: {
+    Cancer: { decision: 0, communication: 1, risk: 0, focus: 1 },
+    Taurus: { decision: 0, communication: 0, risk: 0, focus: 2 }
+  },
+  Mars: {
+    Aries:   { decision: 2, communication: 0, risk: 2, focus: 0 },
+    Scorpio: { decision: 1, communication: 0, risk: 2, focus: 0 },
+    Capricorn: { decision: 2, communication: 0, risk: 1, focus: 0 }
+  },
+  Mercury: {
+    Gemini: { decision: 0, communication: 2, risk: 0, focus: 0 },
+    Virgo:  { decision: 0, communication: 1, risk: 0, focus: 2 }
+  },
+  Jupiter: {
+    Sagittarius: { decision: 2, communication: 0, risk: 0, focus: 0 },
+    Pisces:      { decision: 0, communication: 1, risk: 0, focus: 1 },
+    Cancer:      { decision: 1, communication: 0, risk: 0, focus: 1 }
+  },
+  Venus: {
+    Taurus: { decision: 0, communication: 1, risk: 0, focus: 1 },
+    Libra:  { decision: 0, communication: 2, risk: 0, focus: 0 },
+    Pisces: { decision: 0, communication: 1, risk: -1, focus: 1 }
+  },
+  Saturn: {
+    Capricorn: { decision:  1, communication: 0, risk:  0, focus: 2 },
+    Aquarius:  { decision:  0, communication: 1, risk:  0, focus: 1 },
+    Pisces:    { decision: -1, communication: 0, risk:  0, focus: 1 }
+  }
+}
+
+function dayOfYear() {
+  const now   = new Date()
+  const start = new Date(now.getFullYear(), 0, 0)
+  return Math.floor((now - start) / 86400000)
+}
+
+// Returns an array of active transits: { planet, sign, impact }
+export function getTransits() {
+  const doy    = dayOfYear()
+  const ZODIAC_NAMES = ['Aries','Taurus','Gemini','Cancer','Leo','Virgo',
+                        'Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces']
+  const transits = []
+
+  for (const [planet, speed] of Object.entries(TRANSIT_SPEEDS)) {
+    const signIdx  = Math.floor(doy / speed) % 12
+    const signName = ZODIAC_NAMES[signIdx]
+    const impact   = TRANSIT_IMPACTS[planet]?.[signName] || null
+    transits.push({ planet, sign: signName, impact })
+  }
+  return transits
+}
+
+// Aggregate all transit impacts into one delta object
+export function aggregateTransits(transits, lagna, moonSign) {
+  const agg = { decision: 0, communication: 0, risk: 0, focus: 0 }
+
+  for (const t of transits) {
+    if (!t.impact) continue
+
+    let weight = 0.5  // base transit weight (moderate influence)
+
+    // Personal interaction: transit sign matches Lagna → boost (harmonious)
+    if (lagna && t.sign === lagna.name)     weight = 1.0
+    // Transit sign matches Moon sign → moderate boost (emotional resonance)
+    if (moonSign && t.sign === moonSign.name) weight = Math.max(weight, 0.75)
+
+    agg.decision      += Math.round(t.impact.decision      * weight)
+    agg.communication += Math.round(t.impact.communication * weight)
+    agg.risk          += Math.round(t.impact.risk          * weight)
+    agg.focus         += Math.round(t.impact.focus         * weight)
+  }
+  return agg
+}
+
+// Returns the single most notable transit (strongest non-null impact score)
+export function dominantTransit(transits) {
+  return transits
+    .filter(t => t.impact)
+    .sort((a, b) => {
+      const scoreA = Object.values(a.impact).reduce((s, v) => s + Math.abs(v), 0)
+      const scoreB = Object.values(b.impact).reduce((s, v) => s + Math.abs(v), 0)
+      return scoreB - scoreA
+    })[0] || null
+}
+
 // ─── Human-readable dimension labels ─────────────────────────────────────────
 export const DIM_LABEL = {
   decision:      'decision-making clarity',
@@ -223,43 +388,47 @@ function typeBoost(type) {
   return { decision: 0, communication: 0, focus: 0 }
 }
 
-// ─── Full stacked scoring (7 layers) ─────────────────────────────────────────
-// Order: base → planet → lunar → day type → user traits → lagna → moon sign → profile type + jitter
-export function scoredSlots(seed, planet, type, lunar, dayType, traits, lagna, moonSign) {
-  const p  = planet  || getPlanet()
-  const lu = lunar   || getLunarPhase()
-  const dt = dayType || getDayType()
-  const tb = typeBoost(type)
-  const tr = traits  || { decision_bias: 0, risk_tolerance: 0, communication_style: 0, focus_strength: 0 }
+// ─── Full stacked scoring (10 layers) ────────────────────────────────────────
+// Order: base → vara → lunar → tithi → nakshatra → transit → user traits → lagna → moon sign → profile + jitter
+export function scoredSlots(seed, planet, type, lunar, dayType, traits, lagna, moonSign, transitDelta) {
+  const p   = planet  || getPlanet()
+  const vara = getVara()              // replaces dayType — Vara IS the day ruler
+  const lu  = lunar   || getLunarPhase()
+  const tb  = typeBoost(type)
+  const tr  = traits  || { decision_bias: 0, risk_tolerance: 0, communication_style: 0, focus_strength: 0 }
+  const td  = transitDelta || { decision: 0, communication: 0, risk: 0, focus: 0 }
+  const tth = getTithi()
+  const nk  = getNakshatra()
 
   const decAdj  = (seed % 3) - 1
   const commAdj = seed % 2
 
   return SLOTS.map(s => {
     const dims = {
-      decision:      s.decision      + p.decision      + lu.decision  + dt.decision      + tr.decision_bias      + decAdj  + tb.decision,
-      communication: s.communication + p.communication                + dt.communication + tr.communication_style + commAdj + tb.communication,
-      risk:          s.risk          + p.risk          + lu.risk                         + tr.risk_tolerance,
-      focus:         s.focus         + p.focus         + lu.focus                        + tr.focus_strength                + tb.focus
+      decision:      s.decision      + p.decision      + vara.decision      + lu.decision  + tth.delta.decision + nk.decision  + tr.decision_bias      + decAdj  + tb.decision      + td.decision,
+      communication: s.communication + p.communication + vara.communication                                     + nk.communication + tr.communication_style + commAdj + tb.communication + td.communication,
+      risk:          s.risk          + p.risk          + vara.risk          + lu.risk      + tth.delta.risk     + nk.risk      + tr.risk_tolerance                                   + td.risk,
+      focus:         s.focus         + p.focus         + vara.focus         + lu.focus     + tth.delta.focus    + nk.focus     + tr.focus_strength                + tb.focus         + td.focus
     }
-    applyZodiac(dims, lagna,    1.0)   // lagna: full weight
-    applyZodiac(dims, moonSign, 0.5)   // moon sign: half weight
+    applyZodiac(dims, lagna,    1.0)
+    applyZodiac(dims, moonSign, 0.5)
     const score = dims.decision + dims.communication + dims.focus - dims.risk
     return { ...s, ...dims, score }
   })
 }
 
 // ─── Dominant dimension ───────────────────────────────────────────────────────
-export function dominantDimension(planet, lunar, traits, lagna, moonSign) {
+export function dominantDimension(planet, lunar, traits, lagna, moonSign, transitDelta) {
   const p  = planet || getPlanet()
   const lu = lunar  || getLunarPhase()
   const tr = traits || { decision_bias: 0, risk_tolerance: 0, communication_style: 0, focus_strength: 0 }
+  const td = transitDelta || { decision: 0, communication: 0, risk: 0, focus: 0 }
 
   const combined = {
-    decision:      Math.abs(p.decision      + lu.decision  + tr.decision_bias      + (lagna?.decision || 0) + Math.round((moonSign?.decision || 0) * 0.5)),
-    communication: Math.abs(p.communication               + tr.communication_style + (lagna?.communication || 0) + Math.round((moonSign?.communication || 0) * 0.5)),
-    focus:         Math.abs(p.focus         + lu.focus     + tr.focus_strength     + (lagna?.focus || 0) + Math.round((moonSign?.focus || 0) * 0.5)),
-    risk:          Math.abs(p.risk          + lu.risk      + tr.risk_tolerance     + (lagna?.risk || 0) + Math.round((moonSign?.risk || 0) * 0.5))
+    decision:      Math.abs(p.decision      + lu.decision  + tr.decision_bias      + (lagna?.decision || 0) + Math.round((moonSign?.decision || 0) * 0.5)      + td.decision),
+    communication: Math.abs(p.communication               + tr.communication_style + (lagna?.communication || 0) + Math.round((moonSign?.communication || 0) * 0.5) + td.communication),
+    focus:         Math.abs(p.focus         + lu.focus     + tr.focus_strength     + (lagna?.focus || 0) + Math.round((moonSign?.focus || 0) * 0.5)         + td.focus),
+    risk:          Math.abs(p.risk          + lu.risk      + tr.risk_tolerance     + (lagna?.risk || 0) + Math.round((moonSign?.risk || 0) * 0.5)           + td.risk)
   }
   return Object.entries(combined).sort((a, b) => b[1] - a[1])[0][0]
 }
@@ -273,37 +442,53 @@ export function toConfidence(bestScore, worstScore) {
 }
 
 // ─── Reasoning builder ────────────────────────────────────────────────────────
-export function buildReasoning({ planet, lunar, dayType, dominant, ctx, dimScore, riskScore, decision, traits, lagna, moonSign }) {
-  const p  = planet  || getPlanet()
-  const lu = lunar   || getLunarPhase()
-  const dt = dayType || getDayType()
-  const tr = traits  || {}
-  const nk = getNakshatra()
+export function buildReasoning({ planet, lunar, dayType, dominant, ctx, dimScore, riskScore, decision, traits, lagna, moonSign, transitInfo }) {
+  const p    = planet  || getPlanet()
+  const lu   = lunar   || getLunarPhase()
+  const vara = getVara()
+  const tth  = getTithi()
+  const nk   = getNakshatra()
+  const tr   = traits  || {}
 
   const planetInfluence = PLANET_REASONING[p.name]
   const dimHuman  = DIM_LABEL[dominant] || dominant
   const ctxHuman  = DIM_LABEL[ctx]      || ctx
   const riskFlag  = riskScore >= 1 ? 'elevated' : riskScore <= -1 ? 'reduced' : 'neutral'
-
-  // Dasha: keyed to planet of the day — represents the dominant life-phase influence today
   const dashaLabelStr = dashaLabel(p.name)
+
+  const transitLabel = transitInfo
+    ? `${transitInfo.planet} transiting ${transitInfo.sign} (${planetLabel(transitInfo.planet)})`
+    : null
 
   return {
     planet:            p.name,
     planetLabel:       planetLabel(p.name),
     planetInfluence,
     dashaLabel:        dashaLabelStr,
-    lunarPhase:        lu.name,
-    lunarLabel:        lu.label,
-    dayTypeName:       dt.name,
-    dayTypeLabel:      dt.label,
+    // Vara (Panchang weekday ruler)
+    varaName:          vara.name,
+    varaCultural:      vara.cultural,
+    varaLabel:         vara.label,
+    // Tithi (lunar day)
+    tithi:             tth.tithi,
+    tithiPhase:        tth.phase,
+    tithiLabel:        tth.label,
+    // Nakshatra (27-star system)
     nakshatraName:     nk.name,
     nakshatraCultural: nk.cultural,
     nakshatraLabel:    nk.label,
+    // Lunar phase (kept for compat)
+    lunarPhase:        lu.name,
+    lunarLabel:        lu.label,
+    // Birth & zodiac
     lagnaSign:         lagna?.name    || null,
     lagnaLabel:        lagnaLabel(lagna?.name),
     moonSignName:      moonSign?.name || null,
     rasiLabel:         rasiLabel(moonSign?.name),
+    // Transit
+    transitLabel,
+    transitPlanet:     transitInfo?.planet || null,
+    transitSign:       transitInfo?.sign   || null,
     dominant,
     dimHuman,
     ctx,

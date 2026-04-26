@@ -3,6 +3,7 @@ import HomeScreen from './components/HomeScreen'
 import AskModal from './components/AskModal'
 import ProfileModal from './components/ProfileModal'
 import BottomNav from './components/BottomNav'
+import { loadHistory, computeFeedbackAdj } from './lib/history'
 
 const MOCK_DAILY = {
   golden_window: '09:00–11:00',
@@ -28,8 +29,15 @@ export default function App() {
   const [askOpen, setAskOpen]         = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [users, setUsers]             = useState(loadUsers)
+  const [feedbackAdj, setFeedbackAdj] = useState(() => computeFeedbackAdj(loadHistory()))
 
   useEffect(() => { fetchDaily(users) }, [])
+
+  // Recompute feedback adjustments whenever the modal closes (after possible feedback)
+  function handleAskClose() {
+    setAskOpen(false)
+    setFeedbackAdj(computeFeedbackAdj(loadHistory()))
+  }
 
   async function fetchDaily(currentUsers) {
     setLoading(true)
@@ -37,7 +45,7 @@ export default function App() {
       const res = await fetch('/api/daily', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ users: currentUsers })
+        body: JSON.stringify({ users: currentUsers, feedbackAdj })
       })
       if (!res.ok) throw new Error()
       setDaily(await res.json())
@@ -65,7 +73,7 @@ export default function App() {
         onProfileOpen={() => setProfileOpen(true)}
       />
       <BottomNav onAsk={() => setAskOpen(true)} onProfile={() => setProfileOpen(true)} />
-      {askOpen     && <AskModal onClose={() => setAskOpen(false)} profile={primaryUser} />}
+      {askOpen     && <AskModal onClose={handleAskClose} profile={primaryUser} feedbackAdj={feedbackAdj} />}
       {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} users={users} onSave={handleSaveUsers} />}
     </div>
   )

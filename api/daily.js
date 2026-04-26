@@ -1,7 +1,9 @@
 import {
   scoredSlots, buildSeed, buildTraits, getPlanet, getLunarPhase, getDayType,
   toConfidence, dominantDimension, DIM_LABEL, PLANET_REASONING, buildReasoning,
-  computeLagna, computeMoonSign
+  computeLagna, computeMoonSign,
+  getTransits, aggregateTransits, dominantTransit,
+  getTithi, getNakshatra, getVara
 } from './engine.js'
 
 const DO_MSGS = [
@@ -34,10 +36,12 @@ function buildSummary(r, goldenTime, avoidTime) {
     ? ' Favour conservative moves.'
     : ''
 
-  // Dasha always included — one cultural anchor per summary
-  const dashaNote = `${r.dashaLabel} ${r.planetInfluence}; today falls under ${r.nakshatraCultural} (${r.nakshatraLabel}).`
+  // Panchang anchor: Vara + Tithi + Nakshatra — the three pillars
+  const panchaNote = `${r.varaCultural}: ${r.tithiLabel}; Nakshatra is ${r.nakshatraCultural} (${r.nakshatraLabel}).`
 
-  // Birth layer: Lagna if personal reasoning needed, Rasi only for communication/emotion context
+  // Dasha secondary reference
+  const dashaNote = `${r.dashaLabel} ${r.planetInfluence}.`
+
   const birthParts = []
   if (r.lagnaLabel)                                                         birthParts.push(r.lagnaLabel)
   if (r.rasiLabel && ['communication', 'focus'].includes(r.dominant))       birthParts.push(r.rasiLabel)
@@ -45,29 +49,36 @@ function buildSummary(r, goldenTime, avoidTime) {
     ? ` ${birthParts.join(' and ')} shapes your personal alignment.`
     : ''
 
+  const transitLine = r.transitLabel
+    ? ` Active transit: ${r.transitLabel}.`
+    : ''
+
   return (
     `Use your ${goldenTime} window for key decisions and important actions. ` +
     `Avoid starting new commitments after ${avoidTime}. ` +
-    `${dashaNote}${birthLine}${riskNote}${traitHint}`
+    `${panchaNote} ${dashaNote}${birthLine}${transitLine}${riskNote}${traitHint}`
   )
 }
 
-function computeForUser(user, planet, lunar, dayType) {
-  const seed     = buildSeed(user.dob)
-  const traits   = buildTraits(user.dob)
-  const lagna    = computeLagna(user.birth_time)
-  const moonSign = computeMoonSign(user.dob)
-  const slots    = scoredSlots(seed, planet, user.type, lunar, dayType, traits, lagna, moonSign)
-  const sorted   = [...slots].sort((a, b) => b.score - a.score)
-  const golden   = sorted[0]
-  const worst    = sorted[sorted.length - 1]
-  const medium   = [...slots].sort((a, b) => Math.abs(a.score) - Math.abs(b.score))[0]
+function computeForUser(user, planet, lunar, dayType, transits) {
+  const seed         = buildSeed(user.dob)
+  const traits       = buildTraits(user.dob)
+  const lagna        = computeLagna(user.birth_time)
+  const moonSign     = computeMoonSign(user.dob)
+  const transitDelta = aggregateTransits(transits, lagna, moonSign)
+  const domTransit   = dominantTransit(transits)
+  const slots        = scoredSlots(seed, planet, user.type, lunar, dayType, traits, lagna, moonSign, transitDelta)
+  const sorted       = [...slots].sort((a, b) => b.score - a.score)
+  const golden       = sorted[0]
+  const worst        = sorted[sorted.length - 1]
+  const medium       = [...slots].sort((a, b) => Math.abs(a.score) - Math.abs(b.score))[0]
 
-  const dominant   = dominantDimension(planet, lunar, traits, lagna, moonSign)
+  const dominant   = dominantDimension(planet, lunar, traits, lagna, moonSign, transitDelta)
   const confidence = toConfidence(golden.score, worst.score)
 
   const reasoning = buildReasoning({
     planet, lunar, dayType, traits, lagna, moonSign,
+    transitInfo: domTransit,
     dominant,
     ctx:       dominant,
     dimScore:  golden[dominant] ?? golden.decision,
@@ -95,6 +106,7 @@ function computeForUser(user, planet, lunar, dayType) {
       riskFlag:        reasoning.riskFlag,
       lagna:           lagna?.name    || null,
       moon_sign:       moonSign?.name || null,
+      transitLabel:    reasoning.transitLabel,
       traits
     }
   }
@@ -111,12 +123,19 @@ export default function handler(req, res) {
   const planet  = getPlanet()
   const lunar   = getLunarPhase()
   const dayType = getDayType()
-  const members = users.map(u => computeForUser(u, planet, lunar, dayType))
+  const transits = getTransits()
+  const members = users.map(u => computeForUser(u, planet, lunar, dayType, transits))
   const primary = members[0]
 
   const avgConfidence = Math.round(
     members.reduce((s, m) => s + m.confidence, 0) / members.length
   )
+
+  // Expose dominant transit in top-level response
+  const domTransit = dominantTransit(transits)
+  const tithi   = getTithi()
+  const naksh   = getNakshatra()
+  const vara    = getVara()
 
   res.status(200).json({
     golden_window:      primary.golden_window,
@@ -126,7 +145,11 @@ export default function handler(req, res) {
     watch:              primary.watch,
     planet:             planet.name,
     lunar_phase:        lunar.name,
-    day_type:           dayType.name,
+    vara:               vara.name,
+    tithi:              tithi.tithi,
+    tithi_phase:        tithi.phase,
+    nakshatra:          naksh.name,
+    transit:            domTransit ? { planet: domTransit.planet, sign: domTransit.sign } : null,
     confidence_summary: avgConfidence,
     members
   })
