@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import HomeScreen from './components/HomeScreen'
 import AskModal from './components/AskModal'
 import ProfileModal from './components/ProfileModal'
+import InviteModal from './components/InviteModal'
 import BottomNav from './components/BottomNav'
 import { loadHistory, computeFeedbackAdj } from './lib/history'
 
@@ -28,6 +29,7 @@ export default function App() {
   const [loading, setLoading]         = useState(true)
   const [askOpen, setAskOpen]         = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [inviteOpen, setInviteOpen]   = useState(false)
   const [users, setUsers]             = useState(loadUsers)
   const [feedbackAdj, setFeedbackAdj] = useState(() => computeFeedbackAdj(loadHistory()))
 
@@ -71,10 +73,12 @@ export default function App() {
         loading={loading}
         primaryUser={primaryUser}
         onProfileOpen={() => setProfileOpen(true)}
+        onInvite={() => setInviteOpen(true)}
       />
       <BottomNav onAsk={() => setAskOpen(true)} onProfile={() => setProfileOpen(true)} />
       {askOpen     && <AskModal onClose={handleAskClose} profile={primaryUser} feedbackAdj={feedbackAdj} />}
       {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} users={users} onSave={handleSaveUsers} />}
+      {inviteOpen  && <InviteModal onClose={() => setInviteOpen(false)} />}
     </div>
   )
 }

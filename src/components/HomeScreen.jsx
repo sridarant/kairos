@@ -15,10 +15,13 @@ const FOCUS_MAP = {
   focus:         'Deep Work',
   risk:          'Caution'
 }
-const OUTCOME_ICON = { success: '✅', fail: '❌' }
+const OUTCOME_ICON  = { success: '✅', fail: '❌' }
 const DECISION_LABEL = { do: 'DO', avoid: 'AVOID', wait: 'WAIT' }
 
-function MemberCard({ member, delay }) {
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function MemberCard({ member, primaryWindow, delay }) {
+  const aligns = member.golden_window === primaryWindow
   return (
     <div className="fade-in" style={{
       background: 'var(--gray-2)', borderRadius: 12, padding: 14, animationDelay: delay
@@ -27,6 +30,11 @@ function MemberCard({ member, delay }) {
         <p style={{ fontSize: 13, fontWeight: 600 }}>{member.name}</p>
         <p style={{ fontSize: 11, color: 'var(--yellow)', fontWeight: 600 }}>{member.golden_window}</p>
       </div>
+      <p style={{ fontSize: 12, color: aligns ? 'var(--green-txt)' : 'var(--amber-txt)', marginBottom: 4 }}>
+        {aligns
+          ? '✓ Your decision timing aligns today'
+          : `Different peak window from yours`}
+      </p>
       <p style={{ fontSize: 13, color: 'var(--gray-4)' }}>{member.summary}</p>
     </div>
   )
@@ -37,8 +45,7 @@ function TodayFocus({ dominant }) {
   return (
     <div className="fade-in" style={{
       display: 'flex', alignItems: 'center', gap: 8,
-      background: 'var(--gray-2)', borderRadius: 12, padding: '10px 14px',
-      marginBottom: 12
+      background: 'var(--gray-2)', borderRadius: 12, padding: '10px 14px', marginBottom: 10
     }}>
       <span style={{ fontSize: 12, color: 'var(--gray-4)' }}>TODAY'S FOCUS</span>
       <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--yellow)', marginLeft: 'auto' }}>{label}</span>
@@ -48,29 +55,52 @@ function TodayFocus({ dominant }) {
 
 function WindowTrigger({ goldenWindow }) {
   const [mins, setMins] = useState(() => minsUntilWindow(goldenWindow))
-
   useEffect(() => {
     const t = setInterval(() => setMins(minsUntilWindow(goldenWindow)), 60000)
     return () => clearInterval(t)
   }, [goldenWindow])
-
   if (!mins) return null
-
-  const hours = Math.floor(mins / 60)
-  const rem   = mins % 60
-  const label = hours > 0
-    ? `${hours}h ${rem}m`
-    : `${mins} min${mins !== 1 ? 's' : ''}`
-
+  const h   = Math.floor(mins / 60)
+  const rem = mins % 60
+  const label = h > 0 ? `${h}h ${rem}m` : `${mins} min${mins !== 1 ? 's' : ''}`
   return (
     <div className="fade-in" style={{
       background: 'var(--gray-2)', borderRadius: 12, padding: '10px 14px',
-      marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6
+      marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6
     }}>
       <span style={{ fontSize: 13 }}>⏰</span>
       <p style={{ fontSize: 13, color: 'var(--white)' }}>
-        Your next best window starts in <span style={{ color: 'var(--yellow)', fontWeight: 700 }}>{label}</span>
+        Next best window in <span style={{ color: 'var(--yellow)', fontWeight: 700 }}>{label}</span>
       </p>
+    </div>
+  )
+}
+
+function WhyItMatters({ dominant }) {
+  const lines = {
+    communication: 'Acting on conversations now sets the tone for the rest of the day.',
+    decision:      'Decisions made in peak windows carry more clarity and follow-through.',
+    focus:         'Deep work done in high-focus windows compounds over time.',
+    risk:          'Being cautious today protects tomorrow\'s opportunities.'
+  }
+  const line = lines[dominant]
+  if (!line) return null
+  return (
+    <p style={{ fontSize: 12, color: 'var(--gray-4)', marginTop: 8, lineHeight: 1.5 }}>
+      <span style={{ color: 'var(--white)', fontWeight: 600 }}>Why this matters: </span>{line}
+    </p>
+  )
+}
+
+function InsightCard({ insight }) {
+  if (!insight) return null
+  return (
+    <div className="fade-in" style={{
+      background: 'var(--gray-2)', borderRadius: 12, padding: '12px 14px',
+      marginTop: 14, display: 'flex', gap: 10, alignItems: 'flex-start'
+    }}>
+      <span style={{ fontSize: 16, flexShrink: 0 }}>💡</span>
+      <p style={{ fontSize: 13, color: 'var(--gray-4)', lineHeight: 1.5 }}>{insight}</p>
     </div>
   )
 }
@@ -79,7 +109,7 @@ function DecisionTimeline({ history }) {
   const recent = history.slice(0, 5)
   if (recent.length === 0) return null
   return (
-    <div className="fade-in" style={{ marginTop: 24 }}>
+    <div style={{ marginTop: 24 }}>
       <p style={{ fontSize: 12, color: 'var(--gray-4)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         Recent Decisions
       </p>
@@ -106,20 +136,49 @@ function DecisionTimeline({ history }) {
   )
 }
 
-function InsightCard({ insight }) {
-  if (!insight) return null
+function PremiumSection() {
+  const items = [
+    { icon: '📊', label: 'Weekly Analysis',      sub: 'Your patterns across 7 days' },
+    { icon: '🌀', label: 'Life Phase Deep Dive',  sub: 'Long-cycle Dasha mapping' },
+    { icon: '🧠', label: 'Advanced Insights',     sub: 'AI-powered decision coaching' }
+  ]
   return (
-    <div className="fade-in" style={{
-      background: 'var(--gray-2)', borderRadius: 12, padding: '12px 14px',
-      marginTop: 16, display: 'flex', gap: 10, alignItems: 'flex-start'
-    }}>
-      <span style={{ fontSize: 16, flexShrink: 0 }}>💡</span>
-      <p style={{ fontSize: 13, color: 'var(--gray-4)', lineHeight: 1.5 }}>{insight}</p>
+    <div style={{ marginTop: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <p style={{ fontSize: 12, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Coming Soon
+        </p>
+        <span style={{
+          fontSize: 10, color: 'var(--yellow)', fontWeight: 700, textTransform: 'uppercase',
+          background: 'rgba(250,204,21,0.1)', borderRadius: 20, padding: '2px 8px'
+        }}>Pro</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {items.map(item => (
+          <div key={item.label} style={{
+            background: 'var(--gray-2)', borderRadius: 12, padding: '12px 14px',
+            display: 'flex', alignItems: 'center', gap: 12, opacity: 0.6
+          }}>
+            <span style={{ fontSize: 20, flexShrink: 0 }}>{item.icon}</span>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--white)' }}>{item.label}</p>
+              <p style={{ fontSize: 12, color: 'var(--gray-4)' }}>{item.sub}</p>
+            </div>
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--gray-4)', flexShrink: 0 }}>
+              Unlock →
+            </span>
+          </div>
+        ))}
+      </div>
+      <p style={{ fontSize: 11, color: 'var(--gray-4)', textAlign: 'center', marginTop: 10 }}>
+        Kairos helps improve decision timing through daily guidance
+      </p>
     </div>
   )
 }
 
-export default function HomeScreen({ daily, loading, primaryUser, onProfileOpen }) {
+// ─── Main component ───────────────────────────────────────────────────────────
+export default function HomeScreen({ daily, loading, primaryUser, onProfileOpen, onInvite }) {
   const [version, setVersion] = useState(null)
   const [history, setHistory] = useState([])
 
@@ -128,26 +187,31 @@ export default function HomeScreen({ daily, loading, primaryUser, onProfileOpen 
     setHistory(loadHistory())
   }, [])
 
-  const greeting = primaryUser?.name ? `Hey ${primaryUser.name.split(' ')[0]}` : 'Today'
-  const insight  = computeInsight(history)
-
-  // Derive dominant dimension from primary member's _reasoning if available
-  const dominant = daily?.members?.[0]?._reasoning?.dominant || null
+  const greeting  = primaryUser?.name ? `Hey ${primaryUser.name.split(' ')[0]}` : 'Today'
+  const insight   = computeInsight(history)
+  const dominant  = daily?.members?.[0]?._reasoning?.dominant || null
 
   const header = (
-    <div className="fade-in" style={{ marginBottom: 16 }}>
+    <div className="fade-in" style={{ marginBottom: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Logo />
           <h1 style={{ fontSize: 20, fontWeight: 600 }}>Kairos</h1>
         </div>
-        <button onClick={onProfileOpen} className="scale-tap" style={{
-          background: 'var(--gray-2)', border: 'none', borderRadius: 20,
-          color: 'var(--gray-4)', fontSize: 13, padding: '6px 12px',
-          cursor: 'pointer', fontFamily: 'inherit'
-        }}>
-          {primaryUser?.name ? `👤 ${primaryUser.name.split(' ')[0]}` : '+ Profile'}
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={onInvite} className="scale-tap" style={{
+            background: 'var(--gray-2)', border: 'none', borderRadius: 20,
+            color: 'var(--yellow)', fontSize: 13, padding: '6px 12px',
+            cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600
+          }}>Invite</button>
+          <button onClick={onProfileOpen} className="scale-tap" style={{
+            background: 'var(--gray-2)', border: 'none', borderRadius: 20,
+            color: 'var(--gray-4)', fontSize: 13, padding: '6px 12px',
+            cursor: 'pointer', fontFamily: 'inherit'
+          }}>
+            {primaryUser?.name ? `👤 ${primaryUser.name.split(' ')[0]}` : '+ Profile'}
+          </button>
+        </div>
       </div>
       <p style={{ fontSize: 14, color: 'var(--gray-4)', marginTop: 4 }}>Know when to act</p>
     </div>
@@ -172,43 +236,32 @@ export default function HomeScreen({ daily, loading, primaryUser, onProfileOpen 
     <div style={{ padding: 16, paddingTop: 56 }}>
       {header}
 
-      {/* Today's Focus */}
       {dominant && <TodayFocus dominant={dominant} />}
-
-      {/* Window Trigger */}
       <WindowTrigger goldenWindow={daily.golden_window} />
 
       {/* Astro badges */}
       <div className="fade-in" style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
         {daily.planet && (
-          <span style={{
-            background: 'var(--gray-2)', borderRadius: 20, padding: '4px 10px',
-            fontSize: 12, color: 'var(--gray-4)', display: 'inline-flex', alignItems: 'center', gap: 4
-          }}>
+          <span style={{ background: 'var(--gray-2)', borderRadius: 20, padding: '4px 10px',
+            fontSize: 12, color: 'var(--gray-4)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             {PLANET_SYMBOL[daily.planet] || '✦'} {daily.planet}
           </span>
         )}
         {daily.lunar_phase && (
-          <span style={{
-            background: 'var(--gray-2)', borderRadius: 20, padding: '4px 10px',
-            fontSize: 12, color: 'var(--gray-4)', display: 'inline-flex', alignItems: 'center', gap: 4
-          }}>
+          <span style={{ background: 'var(--gray-2)', borderRadius: 20, padding: '4px 10px',
+            fontSize: 12, color: 'var(--gray-4)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             {LUNAR_SYMBOL[daily.lunar_phase] || '🌙'} {daily.lunar_phase}
           </span>
         )}
         {daily.nakshatra && (
-          <span style={{
-            background: 'var(--gray-2)', borderRadius: 20, padding: '4px 10px',
-            fontSize: 12, color: 'var(--gray-4)', display: 'inline-flex', alignItems: 'center', gap: 4
-          }}>
+          <span style={{ background: 'var(--gray-2)', borderRadius: 20, padding: '4px 10px',
+            fontSize: 12, color: 'var(--gray-4)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             ✦ {daily.nakshatra}
           </span>
         )}
         {daily.tithi && (
-          <span style={{
-            background: 'var(--gray-2)', borderRadius: 20, padding: '4px 10px',
-            fontSize: 12, color: 'var(--gray-4)', display: 'inline-flex', alignItems: 'center', gap: 4
-          }}>
+          <span style={{ background: 'var(--gray-2)', borderRadius: 20, padding: '4px 10px',
+            fontSize: 12, color: 'var(--gray-4)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             🌗 Tithi {daily.tithi}
           </span>
         )}
@@ -217,7 +270,7 @@ export default function HomeScreen({ daily, loading, primaryUser, onProfileOpen 
       {/* Golden window */}
       <div className="fade-in" style={{
         background: 'var(--yellow)', color: '#000',
-        padding: '20px', borderRadius: 16, marginBottom: 16,
+        padding: '20px', borderRadius: 16, marginBottom: 4,
         animationDelay: '0.05s'
       }}>
         <p style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, opacity: 0.6 }}>
@@ -225,9 +278,10 @@ export default function HomeScreen({ daily, loading, primaryUser, onProfileOpen 
         </p>
         <p style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{daily.golden_window}</p>
       </div>
+      {dominant && <WhyItMatters dominant={dominant} />}
 
       {/* Cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
         <div className="scale-tap fade-in" style={{ background: 'var(--green-bg)', padding: 16, borderRadius: 12, animationDelay: '0.1s' }}>
           <p style={{ fontSize: 12, color: 'var(--green-txt)', marginBottom: 6 }}>🟢 DO</p>
           <p style={{ fontSize: 15 }}>{daily.do}</p>
@@ -242,28 +296,27 @@ export default function HomeScreen({ daily, loading, primaryUser, onProfileOpen 
         </div>
       </div>
 
-      {/* Insight card */}
       <InsightCard insight={insight} />
-
-      {/* Decision timeline */}
       <DecisionTimeline history={history} />
 
-      {/* Family */}
+      {/* Family with comparison */}
       {familyMembers.length > 0 && (
-        <div className="fade-in" style={{ marginTop: 24 }}>
+        <div style={{ marginTop: 24 }}>
           <p style={{ fontSize: 12, color: 'var(--gray-4)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Family
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {familyMembers.map((m, i) => (
-              <MemberCard key={i} member={m} delay={`${0.28 + i * 0.05}s`} />
+              <MemberCard key={i} member={m} primaryWindow={daily.golden_window} delay={`${0.28 + i * 0.05}s`} />
             ))}
           </div>
         </div>
       )}
 
+      <PremiumSection />
+
       {/* Footer */}
-      <div className="fade-in" style={{ marginTop: 24, textAlign: 'center' }}>
+      <div style={{ marginTop: 24, textAlign: 'center' }}>
         <p style={{ fontSize: 12, color: 'var(--gray-4)' }}>
           Confidence: {daily.confidence_summary}%
         </p>
