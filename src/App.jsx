@@ -5,6 +5,7 @@ import ProfileModal from './components/ProfileModal'
 import InviteModal from './components/InviteModal'
 import BottomNav from './components/BottomNav'
 import { loadHistory, computeFeedbackAdj } from './lib/history'
+import { trackAppOpen } from './lib/analytics'
 
 const MOCK_DAILY = {
   golden_window: '09:00–11:00',
@@ -33,7 +34,7 @@ export default function App() {
   const [users, setUsers]             = useState(loadUsers)
   const [feedbackAdj, setFeedbackAdj] = useState(() => computeFeedbackAdj(loadHistory()))
 
-  useEffect(() => { fetchDaily(users) }, [])
+  useEffect(() => { trackAppOpen(); fetchDaily(users) }, [])
 
   // Recompute feedback adjustments whenever the modal closes (after possible feedback)
   function handleAskClose() {

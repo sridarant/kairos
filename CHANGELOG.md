@@ -36,3 +36,18 @@
 ## v5.0.0 — Birth Astro Layer (2026-04-25)
 ## v2.0.0 — Major Intelligence Upgrade (2026-04-25)
 ## v1.0.0 — Initial Release
+
+## v12.2.0 — UX Clarity + Signal Fix (2026-04-26)
+
+### Fixes
+- Mobile modals (Profile, Invite): max-height 90vh, overflow-y auto, inner padding-bottom 80px — buttons never cut off
+- ProfileModal DOB field: numeric-only auto-formatting inserts "-" after day and month digits (12031990 → 12-03-1990)
+- ProfileModal Birth Time: uses native `<input type="time">` with colorScheme dark — enforces 24h, no AM/PM
+
+### Improvements
+- Top section now shows exactly 4 tags: Planet, Phase (Waxing→Light, Waning→Fading, Dark→Dark), Nakshatra, Tithi
+- Tags use higher-contrast text (#ccc) with subtle border — readable on dark bg, visually secondary
+- Dynamic tag explanation line below tags (e.g. "Mercury sharpens communication, Ashlesha adds its character, Tithi 14 marks a peak phase.")
+- Confidence % removed from all views
+- Signal Strength replaces it: 🟢 Strong / 🟡 Moderate / 🔴 Weak — shown below DO card, no percentages
+- LUNAR_LABEL map: Full→Full, Waxing→Light, Waning→Fading, Dark→Dark (removes "Dark" ambiguity as a chip label)
