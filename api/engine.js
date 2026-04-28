@@ -92,17 +92,34 @@ export function getNakshatra() {
   return NAKSHATRAS_27[doy % 27]
 }
 
+// Accepts an optional real name from /api/panchang; falls back to deterministic
+export function getNakshatraByName(name) {
+  if (!name) return getNakshatra()
+  const found = NAKSHATRAS_27.find(n => n.name.toLowerCase() === name.toLowerCase())
+  return found || getNakshatra()
+}
+
 // ─── Tithi (lunar day 1–30) ───────────────────────────────────────────────────
-export function getTithi() {
-  const doy   = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000)
-  const tithi = (doy % 30) + 1   // 1–30
+function tithiFromNumber(tithi) {
   let phase, delta, label
-  if (tithi <= 5)  { phase = 'Pratipada'; delta = { decision:  1, focus:  0, risk:  0 }; label = 'early lunar phase — favourable for new beginnings' }
-  else if (tithi <= 10) { phase = 'Panchami'; delta = { decision:  0, focus:  1, risk:  0 }; label = 'growth phase — build and expand' }
-  else if (tithi <= 15) { phase = 'Dashami'; delta = { decision:  2, focus:  0, risk:  0 }; label = 'peak phase — full energy for decisive action' }
-  else if (tithi <= 20) { phase = 'Amavasya approach'; delta = { decision:  0, focus:  0, risk:  1 }; label = 'declining phase — caution and review' }
-  else               { phase = 'Closing'; delta = { decision: -1, focus:  0, risk:  0 }; label = 'closure phase — complete, do not begin' }
+  if (tithi <= 5)       { phase = 'Pratipada'; delta = { decision:  1, focus:  0, risk:  0 }; label = 'early lunar phase — favourable for new beginnings' }
+  else if (tithi <= 10) { phase = 'Panchami';  delta = { decision:  0, focus:  1, risk:  0 }; label = 'growth phase — build and expand' }
+  else if (tithi <= 15) { phase = 'Dashami';   delta = { decision:  2, focus:  0, risk:  0 }; label = 'peak phase — full energy for decisive action' }
+  else if (tithi <= 20) { phase = 'Amavasya approach'; delta = { decision: 0, focus: 0, risk: 1 }; label = 'declining phase — caution and review' }
+  else                  { phase = 'Closing';   delta = { decision: -1, focus:  0, risk:  0 }; label = 'closure phase — complete, do not begin' }
   return { tithi, phase, delta, label }
+}
+
+export function getTithi() {
+  const doy = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000)
+  return tithiFromNumber((doy % 30) + 1)
+}
+
+// Accepts an optional real tithi number from /api/panchang; falls back to deterministic
+export function getTithiByNumber(num) {
+  if (!num || isNaN(num)) return getTithi()
+  const n = Math.max(1, Math.min(30, parseInt(num, 10)))
+  return tithiFromNumber(n)
 }
 
 // ─── Vara (weekday planet mapping) ───────────────────────────────────────────
@@ -363,8 +380,84 @@ export function dominantTransit(transits) {
     })[0] || null
 }
 
-// ─── Human-readable dimension labels ─────────────────────────────────────────
-export const DIM_LABEL = {
+// ─── Moon-cycle Nakshatra system ─────────────────────────────────────────────
+// moonCycle = dayOfYear % 27 → nakshatra index
+// moonSign  = zodiac[floor(moonCycle / 2.25)]  (27 nakshatras / 12 signs ≈ 2.25 per sign)
+export function getMoonCycle() {
+  const doy = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000)
+  return doy % 27
+}
+
+export function getMoonNakshatra(moonCycle) {
+  const mc = moonCycle !== undefined ? moonCycle : getMoonCycle()
+  return NAKSHATRAS_27[mc]
+}
+
+export function getMoonSign(moonCycle) {
+  const ZODIAC_NAMES = ['Aries','Taurus','Gemini','Cancer','Leo','Virgo',
+                        'Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces']
+  const mc  = moonCycle !== undefined ? moonCycle : getMoonCycle()
+  const idx = Math.floor(mc / 2.25) % 12
+  return { name: ZODIAC_NAMES[idx], ...ZODIAC[idx] }
+}
+
+// ─── Moon-based Dasha ─────────────────────────────────────────────────────────
+// dashaIndex = moonCycle % 9  → maps to classical 9-planet Vimshottari sequence
+const DASHA_PLANETS = ['Sun','Moon','Mars','Rahu','Jupiter','Saturn','Mercury','Ketu','Venus']
+
+export function getMoonDasha(moonCycle) {
+  const mc  = moonCycle !== undefined ? moonCycle : getMoonCycle()
+  const idx = mc % 9
+  return DASHA_PLANETS[idx]
+}
+
+// ─── Planetary interaction scoring layer ─────────────────────────────────────
+// Interactions between Moon-derived values and Lagna/transit planet produce
+// bonus/penalty deltas applied after all base layers.
+const INTERACTIONS = {
+  'Moon+Mercury':  { communication:  2, decision:  0, risk:  0, focus:  0 },
+  'Moon+Jupiter':  { communication:  0, decision:  2, risk:  0, focus:  0 },
+  'Moon+Venus':    { communication:  1, decision:  0, risk: -1, focus:  1 },
+  'Moon+Saturn':   { communication:  0, decision: -1, risk:  1, focus:  1 },
+  'Moon+Mars':     { communication:  0, decision:  1, risk:  2, focus: -1 },
+  'Moon+Sun':      { communication:  0, decision:  1, risk:  0, focus:  1 },
+  'Mars+Lagna':    { communication:  0, decision:  1, risk:  2, focus:  0 },
+  'Mercury+Lagna': { communication:  2, decision:  0, risk:  0, focus:  1 },
+  'Jupiter+Lagna': { communication:  0, decision:  2, risk: -1, focus:  0 },
+  'Saturn+Lagna':  { communication:  0, decision: -1, risk:  1, focus:  2 },
+  'Venus+Lagna':   { communication:  1, decision:  0, risk: -1, focus:  1 },
+  'Sun+Lagna':     { communication:  0, decision:  2, risk:  0, focus:  0 },
+}
+
+export function computeInteraction(todayPlanetName, dashaPlanetName, lagnaSignName) {
+  const agg = { decision: 0, communication: 0, risk: 0, focus: 0 }
+
+  // Moon (today's lunar body) interacts with today's dasha planet
+  const moonDashaKey = `Moon+${dashaPlanetName}`
+  const moonDashaDelta = INTERACTIONS[moonDashaKey]
+  if (moonDashaDelta) {
+    agg.decision      += moonDashaDelta.decision
+    agg.communication += moonDashaDelta.communication
+    agg.risk          += moonDashaDelta.risk
+    agg.focus         += moonDashaDelta.focus
+  }
+
+  // Today's planet (Vara) interacts with Lagna sign's ruling planet
+  if (lagnaSignName) {
+    const lagnaKey = `${todayPlanetName}+Lagna`
+    const lagnaDelta = INTERACTIONS[lagnaKey]
+    if (lagnaDelta) {
+      agg.decision      += Math.round(lagnaDelta.decision      * 0.75)
+      agg.communication += Math.round(lagnaDelta.communication * 0.75)
+      agg.risk          += Math.round(lagnaDelta.risk          * 0.75)
+      agg.focus         += Math.round(lagnaDelta.focus         * 0.75)
+    }
+  }
+
+  return agg
+}
+
+
   decision:      'decision-making clarity',
   communication: 'communication strength',
   focus:         'focus and concentration',
@@ -388,30 +481,41 @@ function typeBoost(type) {
   return { decision: 0, communication: 0, focus: 0 }
 }
 
-// ─── Full stacked scoring (10 layers) ────────────────────────────────────────
-// Order: base → vara → lunar → tithi → nakshatra → transit → user traits → lagna → moon sign → profile + jitter
-export function scoredSlots(seed, planet, type, lunar, dayType, traits, lagna, moonSign, transitDelta) {
-  const p   = planet  || getPlanet()
-  const vara = getVara()              // replaces dayType — Vara IS the day ruler
-  const lu  = lunar   || getLunarPhase()
-  const tb  = typeBoost(type)
-  const tr  = traits  || { decision_bias: 0, risk_tolerance: 0, communication_style: 0, focus_strength: 0 }
-  const td  = transitDelta || { decision: 0, communication: 0, risk: 0, focus: 0 }
-  const tth = getTithi()
-  const nk  = getNakshatra()
+// ─── Full stacked scoring (12 layers) ────────────────────────────────────────
+// Order: base → vara → lunar → tithi → nakshatra(real/moon) → moon sign →
+//        lagna → transit → user traits → profile type + jitter → interactions
+export function scoredSlots(seed, planet, type, lunar, dayType, traits, lagna, moonSign, transitDelta, realTithi, realNaksh) {
+  const p    = planet  || getPlanet()
+  const vara = getVara()
+  const lu   = lunar   || getLunarPhase()
+  const tb   = typeBoost(type)
+  const tr   = traits  || { decision_bias: 0, risk_tolerance: 0, communication_style: 0, focus_strength: 0 }
+  const td   = transitDelta || { decision: 0, communication: 0, risk: 0, focus: 0 }
+  const tth  = realTithi || getTithi()
+
+  // Moon-cycle nakshatra (preferred over calendar fallback)
+  const mc   = getMoonCycle()
+  const nk   = realNaksh || getMoonNakshatra(mc)
+
+  // Moon sign derived from moon cycle (overrides DOB-based moonSign if not provided)
+  const moonSgn = moonSign || getMoonSign(mc)
+
+  // Dasha from moon cycle + interaction delta
+  const dasha    = getMoonDasha(mc)
+  const interact = computeInteraction(p.name, dasha, lagna?.name || null)
 
   const decAdj  = (seed % 3) - 1
   const commAdj = seed % 2
 
   return SLOTS.map(s => {
     const dims = {
-      decision:      s.decision      + p.decision      + vara.decision      + lu.decision  + tth.delta.decision + nk.decision  + tr.decision_bias      + decAdj  + tb.decision      + td.decision,
-      communication: s.communication + p.communication + vara.communication                                     + nk.communication + tr.communication_style + commAdj + tb.communication + td.communication,
-      risk:          s.risk          + p.risk          + vara.risk          + lu.risk      + tth.delta.risk     + nk.risk      + tr.risk_tolerance                                   + td.risk,
-      focus:         s.focus         + p.focus         + vara.focus         + lu.focus     + tth.delta.focus    + nk.focus     + tr.focus_strength                + tb.focus         + td.focus
+      decision:      s.decision      + p.decision      + vara.decision      + lu.decision  + tth.delta.decision + nk.decision      + tr.decision_bias      + decAdj  + tb.decision      + td.decision      + interact.decision,
+      communication: s.communication + p.communication + vara.communication                                     + nk.communication + tr.communication_style + commAdj + tb.communication + td.communication + interact.communication,
+      risk:          s.risk          + p.risk          + vara.risk          + lu.risk      + tth.delta.risk     + nk.risk          + tr.risk_tolerance                                   + td.risk          + interact.risk,
+      focus:         s.focus         + p.focus         + vara.focus         + lu.focus     + tth.delta.focus    + nk.focus         + tr.focus_strength                + tb.focus         + td.focus         + interact.focus
     }
     applyZodiac(dims, lagna,    1.0)
-    applyZodiac(dims, moonSign, 0.5)
+    applyZodiac(dims, moonSgn,  0.5)
     const score = dims.decision + dims.communication + dims.focus - dims.risk
     return { ...s, ...dims, score }
   })
@@ -419,16 +523,20 @@ export function scoredSlots(seed, planet, type, lunar, dayType, traits, lagna, m
 
 // ─── Dominant dimension ───────────────────────────────────────────────────────
 export function dominantDimension(planet, lunar, traits, lagna, moonSign, transitDelta) {
-  const p  = planet || getPlanet()
-  const lu = lunar  || getLunarPhase()
-  const tr = traits || { decision_bias: 0, risk_tolerance: 0, communication_style: 0, focus_strength: 0 }
-  const td = transitDelta || { decision: 0, communication: 0, risk: 0, focus: 0 }
+  const p   = planet || getPlanet()
+  const lu  = lunar  || getLunarPhase()
+  const tr  = traits || { decision_bias: 0, risk_tolerance: 0, communication_style: 0, focus_strength: 0 }
+  const td  = transitDelta || { decision: 0, communication: 0, risk: 0, focus: 0 }
+  const mc  = getMoonCycle()
+  const moonSgn  = moonSign || getMoonSign(mc)
+  const dasha    = getMoonDasha(mc)
+  const interact = computeInteraction(p.name, dasha, lagna?.name || null)
 
   const combined = {
-    decision:      Math.abs(p.decision      + lu.decision  + tr.decision_bias      + (lagna?.decision || 0) + Math.round((moonSign?.decision || 0) * 0.5)      + td.decision),
-    communication: Math.abs(p.communication               + tr.communication_style + (lagna?.communication || 0) + Math.round((moonSign?.communication || 0) * 0.5) + td.communication),
-    focus:         Math.abs(p.focus         + lu.focus     + tr.focus_strength     + (lagna?.focus || 0) + Math.round((moonSign?.focus || 0) * 0.5)         + td.focus),
-    risk:          Math.abs(p.risk          + lu.risk      + tr.risk_tolerance     + (lagna?.risk || 0) + Math.round((moonSign?.risk || 0) * 0.5)           + td.risk)
+    decision:      Math.abs(p.decision      + lu.decision  + tr.decision_bias      + (lagna?.decision || 0) + Math.round((moonSgn?.decision || 0) * 0.5)      + td.decision      + interact.decision),
+    communication: Math.abs(p.communication               + tr.communication_style + (lagna?.communication || 0) + Math.round((moonSgn?.communication || 0) * 0.5) + td.communication + interact.communication),
+    focus:         Math.abs(p.focus         + lu.focus     + tr.focus_strength     + (lagna?.focus || 0) + Math.round((moonSgn?.focus || 0) * 0.5)         + td.focus         + interact.focus),
+    risk:          Math.abs(p.risk          + lu.risk      + tr.risk_tolerance     + (lagna?.risk || 0) + Math.round((moonSgn?.risk || 0) * 0.5)           + td.risk          + interact.risk)
   }
   return Object.entries(combined).sort((a, b) => b[1] - a[1])[0][0]
 }
@@ -442,22 +550,34 @@ export function toConfidence(bestScore, worstScore) {
 }
 
 // ─── Reasoning builder ────────────────────────────────────────────────────────
-export function buildReasoning({ planet, lunar, dayType, dominant, ctx, dimScore, riskScore, decision, traits, lagna, moonSign, transitInfo }) {
+export function buildReasoning({ planet, lunar, dayType, dominant, ctx, dimScore, riskScore, decision, traits, lagna, moonSign, transitInfo, realTithi, realNaksh }) {
   const p    = planet  || getPlanet()
   const lu   = lunar   || getLunarPhase()
   const vara = getVara()
-  const tth  = getTithi()
-  const nk   = getNakshatra()
+  const tth  = realTithi || getTithi()
+
+  // Moon-cycle values
+  const mc        = getMoonCycle()
+  const nk        = realNaksh || getMoonNakshatra(mc)
+  const moonSgn   = moonSign  || getMoonSign(mc)
+  const dashaPlanet = getMoonDasha(mc)
+  const interact  = computeInteraction(p.name, dashaPlanet, lagna?.name || null)
+
   const tr   = traits  || {}
 
   const planetInfluence = PLANET_REASONING[p.name]
   const dimHuman  = DIM_LABEL[dominant] || dominant
   const ctxHuman  = DIM_LABEL[ctx]      || ctx
   const riskFlag  = riskScore >= 1 ? 'elevated' : riskScore <= -1 ? 'reduced' : 'neutral'
-  const dashaLabelStr = dashaLabel(p.name)
+  const dashaLabelStr = dashaLabel(dashaPlanet)
 
   const transitLabel = transitInfo
     ? `${transitInfo.planet} transiting ${transitInfo.sign} (${planetLabel(transitInfo.planet)})`
+    : null
+
+  // Interaction note for message building
+  const interactNote = Object.values(interact).some(v => v !== 0)
+    ? `Moon in ${nk.name} activates ${dashaPlanet} Dasha interaction`
     : null
 
   return {
@@ -465,26 +585,31 @@ export function buildReasoning({ planet, lunar, dayType, dominant, ctx, dimScore
     planetLabel:       planetLabel(p.name),
     planetInfluence,
     dashaLabel:        dashaLabelStr,
-    // Vara (Panchang weekday ruler)
+    dashaPlanet,
+    // Vara
     varaName:          vara.name,
     varaCultural:      vara.cultural,
     varaLabel:         vara.label,
-    // Tithi (lunar day)
+    // Tithi
     tithi:             tth.tithi,
     tithiPhase:        tth.phase,
     tithiLabel:        tth.label,
-    // Nakshatra (27-star system)
+    // Moon-cycle Nakshatra
     nakshatraName:     nk.name,
     nakshatraCultural: nk.cultural,
     nakshatraLabel:    nk.label,
-    // Lunar phase (kept for compat)
+    // Moon sign (derived from moon cycle)
+    moonSignName:      moonSgn?.name || null,
+    moonSignCultural:  rasiLabel(moonSgn?.name),
+    rasiLabel:         rasiLabel(moonSgn?.name),
+    // Interaction
+    interactNote,
+    // Lunar phase
     lunarPhase:        lu.name,
     lunarLabel:        lu.label,
-    // Birth & zodiac
+    // Birth Lagna
     lagnaSign:         lagna?.name    || null,
     lagnaLabel:        lagnaLabel(lagna?.name),
-    moonSignName:      moonSign?.name || null,
-    rasiLabel:         rasiLabel(moonSign?.name),
     // Transit
     transitLabel,
     transitPlanet:     transitInfo?.planet || null,
@@ -500,5 +625,7 @@ export function buildReasoning({ planet, lunar, dayType, dominant, ctx, dimScore
     decision,
     traits:            tr,
     traitLines:        traitNarrative(tr)
+  }
+}
   }
 }

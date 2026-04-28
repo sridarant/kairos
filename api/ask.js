@@ -3,7 +3,8 @@ import {
   dominantDimension, toConfidence, DIM_LABEL, buildReasoning,
   computeLagna, computeMoonSign,
   getTransits, aggregateTransits, dominantTransit,
-  getTithi, getNakshatra, getVara
+  getTithi, getNakshatra,
+  getMoonCycle, getMoonNakshatra, getMoonSign, getMoonDasha
 } from './engine.js'
 
 const FALLBACK = {
@@ -14,19 +15,39 @@ const FALLBACK = {
   confidence: 0
 }
 
+// ─── Decision type detection (5 categories) ──────────────────────────────────
 function detectContext(question) {
   const q = question.toLowerCase()
-  if (/career|job|work|boss|colleague|project|deadline|client|office|promotion|resign|hire|fired|salary raise/.test(q))
-    return { primary: 'decision', secondary: 'communication', label: 'work',          verb: 'act on this career matter' }
-  if (/money|invest|financial|fund|budget|cost|price|loan|debt|stock|savings|purchase|buy|spend/.test(q))
-    return { primary: 'risk',     secondary: 'decision',      label: 'money',         verb: 'make this financial move' }
+  if (/career|job|work|boss|colleague|project|deadline|client|office|promotion|resign|quit|hire|fired|salary|raise|contract/.test(q))
+    return { primary: 'decision', secondary: 'communication', label: 'career',        verb: 'act on this career matter' }
+  if (/money|invest|financial|fund|budget|cost|price|loan|debt|stock|savings|purchase|buy|spend|sell|rent|pay/.test(q))
+    return { primary: 'risk',     secondary: 'decision',      label: 'financial',     verb: 'make this financial move' }
   if (/study|learn|course|skill|read|practice|train|exam|school|university|research|focus/.test(q))
-    return { primary: 'focus',    secondary: 'decision',      label: 'learning',      verb: 'pursue this learning goal' }
-  if (/health|doctor|medicine|exercise|diet|sleep|wellness|body|symptom|appointment/.test(q))
+    return { primary: 'focus',    secondary: 'decision',      label: 'personal',      verb: 'pursue this personal goal' }
+  if (/health|doctor|medicine|exercise|diet|sleep|wellness|body|symptom|appointment|surgery|therapy/.test(q))
     return { primary: 'focus',    secondary: 'decision',      label: 'health',        verb: 'act on this health matter' }
-  if (/talk|meeting|conversation|discuss|call|message|relationship|friend|family|partner|conflict/.test(q))
-    return { primary: 'communication', secondary: 'focus',   label: 'relationships', verb: 'have this conversation' }
-  return   { primary: 'decision', secondary: 'communication', label: 'general',       verb: 'proceed with this decision' }
+  if (/talk|meeting|conversation|discuss|call|message|relationship|friend|family|partner|conflict|tell|apologise|confront/.test(q))
+    return { primary: 'communication', secondary: 'focus',   label: 'communication', verb: 'have this conversation' }
+  return   { primary: 'decision', secondary: 'communication', label: 'personal',      verb: 'proceed with this decision' }
+}
+
+// ─── Decision intensity classification ───────────────────────────────────────
+function detectIntensity(question, context) {
+  const q = (question + ' ' + (context || '')).toLowerCase()
+  // High intensity: life-changing, irreversible, high stakes
+  if (/resign|quit job|leave|divorce|marry|buy house|sell house|move country|surgery|major|life.changing|irreversible|permanent|borrow large|invest all/.test(q))
+    return 'high'
+  // Low intensity: routine, reversible, low stakes
+  if (/quick|small|minor|simple|easy|routine|today only|this week|try out|casual|chat|check/.test(q))
+    return 'low'
+  return 'medium'
+}
+
+// Decision label by intensity + engine output
+function decisionLabel(decision, intensity) {
+  if (decision === 'do')    return intensity === 'high' ? 'PROCEED (with care)'  : 'DO NOW'
+  if (decision === 'avoid') return intensity === 'high' ? 'HOLD OFF TODAY'       : 'AVOID TODAY'
+  return                           intensity === 'high' ? 'WAIT FOR CLARITY'     : 'WAIT'
 }
 
 function evaluate(slots, ctx) {
@@ -63,81 +84,96 @@ function evaluate(slots, ctx) {
   }
 }
 
-function buildPrompt(result, r, ctx, question, context, profile) {
+function buildPrompt(result, r, ctx, question, context, profile, intensity) {
   const firstName = profile?.name ? profile.name.split(' ')[0] : null
+  const dLabel = decisionLabel(r.decision, intensity)
 
   const actionMap = {
     do:    `Proceed with ${ctx.verb} now`,
-    wait:  `Hold for now — act during ${result.next_best || result.best_time}`,
+    wait:  `Hold — act during ${result.next_best || result.best_time}`,
     avoid: `Do not ${ctx.verb} today`
   }
   const action = actionMap[r.decision]
 
   const riskLine = r.riskFlag === 'elevated'
-    ? 'Risk is elevated — include one brief caution about timing.'
+    ? 'Risk is elevated — add one brief caution.'
     : r.riskFlag === 'reduced'
     ? 'Risk appetite is reduced — note conservative action is favoured.'
     : ''
 
   const traitHint = r.traitLines?.length > 0
-    ? `User tendency (weave in once, naturally): "${r.traitLines[0]}"`
+    ? `User tendency (weave in once): "${r.traitLines[0]}"`
     : ''
 
-  // Cultural terms: Dasha always; transit if active; Lagna or Rasi by context
   const culturalTerms = [`${r.dashaLabel} ${r.planetInfluence}`]
   if (r.transitLabel) culturalTerms.push(`active transit: ${r.transitLabel}`)
-  if (r.lagnaLabel && ['decision', 'work', 'career', 'general'].includes(ctx.label)) {
+  if (r.lagnaLabel && ['career', 'personal', 'general'].includes(ctx.label))
     culturalTerms.push(`your ${r.lagnaLabel}`)
-  } else if (r.rasiLabel && ['communication', 'relationships'].includes(ctx.label)) {
+  else if (r.rasiLabel && ['communication'].includes(ctx.label))
     culturalTerms.push(`your ${r.rasiLabel}`)
+  const culturalLine = `Cultural context (max 2, natural, no "planet" word): ${culturalTerms.slice(0, 2).join('; ')}.`
+
+  const toneGuide = intensity === 'high'
+    ? 'TONE: Cautious and structured. This is a significant decision — be measured, not casual.'
+    : intensity === 'low'
+    ? 'TONE: Direct and quick. This is a minor decision — be crisp, no padding.'
+    : 'TONE: Balanced. Clear but not abrupt.'
+
+  const nameLine = firstName ? `Open with "${firstName}, " then the decision label.` : 'Do not use a name.'
+
+  const balanceExamples = {
+    career:        'Pro: strong window for initiative. Con: note if risk is elevated.',
+    financial:     'Pro: timing clarity supports the move. Con: note if risk flag is elevated.',
+    communication: 'Pro: communication dimension is favourable. Con: note if energy is low.',
+    health:        'Pro: focus supports clear thinking now. Con: note if caution is needed.',
+    personal:      'Pro: aligned timing. Con: note any tension in scores.'
   }
+  const balanceGuide = balanceExamples[ctx.label] || balanceExamples.personal
 
-  const culturalLine = `Cultural context (use max 2, naturally, no "planet" word): ${culturalTerms.slice(0, 2).join('; ')}.`
-  const nameLine = firstName ? `Open with "${firstName}, " then the action.` : 'Do not use a name.'
+  return `You are a structured decision-support writer for Kairos v15.0.
 
-  return `You are an actionable decision-support writer for Kairos v8.0.
-
-FIXED VALUES — embed exactly:
-- decision: ${r.decision}
-- action:   ${action}
-- best_time: ${result.best_time}
-- avoid_time: ${result.avoid_time}
-- confidence: ${result.confidence}
-
-PANCHANG CONTEXT (today's astrological structure):
-- Vara: ${r.varaCultural} — ${r.varaLabel}
-- Tithi ${r.tithi}: ${r.tithiLabel}
-- Nakshatra: ${r.nakshatraCultural} — ${r.nakshatraLabel}
-
-ADDITIONAL CONTEXT:
+DECISION CONTEXT:
+- Type: ${ctx.label}
+- Intensity: ${intensity}
 - Question: ${question}
-- Context type: ${ctx.label} (dimension: ${r.ctxHuman})
-- Dominant dimension: ${r.dimHuman}
-- Dasha: ${r.dashaLabel} — ${r.planetInfluence}
-- Lunar: ${r.lunarPhase}
-${r.transitLabel ? `- Active transit: ${r.transitLabel}` : ''}
-- Additional context: ${context || 'none'}
+- User context: ${context || 'none'}
+- Profile type: ${profile?.type || 'none'}
+
+FIXED ENGINE VALUES — embed exactly:
+- Decision label: ${dLabel}
+- Action: ${action}
+- Best window: ${result.best_time}
+- Avoid window: ${result.avoid_time}
+- Confidence: ${result.confidence}
+
+ASTRO REASONING (use 2–3 of these naturally):
+- Dominant dimension: ${r.dimHuman} (score: ${result.dimScore})
+- Moon in ${r.nakshatraName || 'Nakshatra'}: ${r.nakshatraLabel || 'adds its character'}
+- Moon sign today: ${r.moonSignName || 'not set'} (${r.moonSignCultural || ''})
+- Active Dasha: ${r.dashaLabel} — shapes the underlying life-phase energy
+${r.interactNote ? `- Interaction: ${r.interactNote}` : ''}
+- ${culturalLine}
 ${traitHint ? `- ${traitHint}` : ''}
 
-CULTURAL TERMS:
-- ${culturalLine}
+${toneGuide}
 
-STRUCTURE (1–2 natural sentences):
-1. Start with the action: "${action}."
-2. Add timing: ${result.best_time} to act, ${result.avoid_time} to avoid.
-3. One short reason referencing ${r.dimHuman} — use the Vara or Nakshatra as the astrological anchor (e.g. "${r.varaName} Vara" or "${r.nakshatraName}").
-4. Max 1 additional cultural term (Dasha, Lagna, or transit) if it adds clarity.
-${riskLine ? `5. ${riskLine}` : ''}
-${nameLine}
-
-OUTPUT — strict JSON only, no markdown:
+STRUCTURE — produce exactly this JSON:
 {
   "decision": "${r.decision}",
+  "decision_label": "${dLabel}",
+  "action": "${action}",
   "best_time": "${result.best_time}",
   "avoid_time": "${result.avoid_time}",
-  "message": "...",
+  "message": "<1-2 sentences: reason + one astro reference (nakshatra, moon sign, or dasha)>",
+  "balance": "<1 sentence pros/cons — ${balanceGuide}>",
   "confidence": ${result.confidence}
-}`
+}
+
+RULES:
+1. message: state reason using ${r.dimHuman}; include one natural reference to nakshatra OR moon sign OR dasha. Max 2 sentences.
+2. balance: one sentence, genuinely balanced. ${riskLine ? riskLine : 'No special risk note.'}
+3. ${nameLine}
+4. No markdown. Strict JSON only.`
 }
 
 export default async function handler(req, res) {
@@ -157,18 +193,24 @@ export default async function handler(req, res) {
     const dayType      = getDayType()
     const seed         = buildSeed(profile?.dob || null)
     const rawTraits    = buildTraits(profile?.dob || null)
-    // Merge feedback adjustments into traits so they flow through the full engine
     const traits = {
       ...rawTraits,
       decision_bias:  rawTraits.decision_bias  + fbDecBias,
       risk_tolerance: rawTraits.risk_tolerance + fbRiskAdj
     }
     const lagna        = computeLagna(profile?.birth_time || null)
-    const moonSign     = computeMoonSign(profile?.dob || null)
     const transits     = getTransits()
+
+    // Moon-cycle derived values
+    const mc           = getMoonCycle()
+    const realNaksh    = getMoonNakshatra(mc)
+    const moonSign     = getMoonSign(mc)
+    const realTithi    = getTithi()
+    const dasha        = getMoonDasha(mc)
+
     const transitDelta = aggregateTransits(transits, lagna, moonSign)
     const domTransit   = dominantTransit(transits)
-    const slots        = scoredSlots(seed, planet, profile?.type || null, lunar, dayType, traits, lagna, moonSign, transitDelta)
+    const slots        = scoredSlots(seed, planet, profile?.type || null, lunar, dayType, traits, lagna, moonSign, transitDelta, realTithi, realNaksh)
     const ctx          = detectContext(question)
     const result       = evaluate(slots, ctx)
     const dominant     = dominantDimension(planet, lunar, traits, lagna, moonSign, transitDelta)
@@ -183,14 +225,17 @@ export default async function handler(req, res) {
       ctx:       ctx.primary,
       dimScore:  result.dimScore,
       riskScore: result.riskScore,
-      decision:  result.decision
+      decision:  result.decision,
+      realTithi,
+      realNaksh
     })
     reasoning.ctxHuman = DIM_LABEL[ctx.primary] || ctx.primary
     reasoning.dimHuman = DIM_LABEL[dominant]     || dominant
 
     // Use adjusted confidence throughout prompt and response
+    const intensity = detectIntensity(question, context)
     const resultWithAdj = { ...result, confidence: adjustedConfidence }
-    const prompt = buildPrompt(resultWithAdj, reasoning, ctx, question, context, profile)
+    const prompt = buildPrompt(resultWithAdj, reasoning, ctx, question, context, profile, intensity)
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -201,7 +246,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'claude-3-haiku-20240307',
-        max_tokens: 260,
+        max_tokens: 350,
         messages: [{ role: 'user', content: prompt }]
       })
     })
@@ -218,17 +263,22 @@ export default async function handler(req, res) {
     if (!json.message) throw new Error('no_message')
 
     return res.status(200).json({
-      decision:    json.decision,
-      best_time:   result.best_time,
-      avoid_time:  result.avoid_time,
-      next_best:   result.next_best,
-      message:     json.message,
-      confidence:  adjustedConfidence,
+      decision:       json.decision,
+      decision_label: json.decision_label || json.decision.toUpperCase(),
+      action:         json.action || null,
+      best_time:      result.best_time,
+      avoid_time:     result.avoid_time,
+      next_best:      result.next_best,
+      message:        json.message,
+      balance:        json.balance || null,
+      confidence:     adjustedConfidence,
       planet:      planet.name,
       lunar_phase: lunar.name,
       vara:        planet.name,   // Vara IS the weekday planet
-      tithi:       getTithi().tithi,
-      nakshatra:   getNakshatra().name,
+      tithi:       realTithi.tithi,
+      nakshatra:   realNaksh.name,
+      moon_sign:   moonSign?.name || null,
+      dasha:       dasha,
       lagna:       lagna?.name    || null,
       moon_sign:   moonSign?.name || null,
       transit:     domTransit ? { planet: domTransit.planet, sign: domTransit.sign } : null,

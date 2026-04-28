@@ -3,29 +3,30 @@ import {
   toConfidence, dominantDimension, DIM_LABEL, PLANET_REASONING, buildReasoning,
   computeLagna, computeMoonSign,
   getTransits, aggregateTransits, dominantTransit,
-  getTithi, getNakshatra, getVara
+  getTithi, getTithiByNumber, getNakshatra, getNakshatraByName, getVara,
+  getMoonCycle, getMoonNakshatra, getMoonSign, getMoonDasha
 } from './engine.js'
 
 const DO_MSGS = [
-  'Make important decisions and have key conversations',
-  'Tackle complex work requiring full focus',
-  'Send proposals, pitches, or critical messages',
-  'Negotiate, plan, or lead discussions',
-  'Start high-stakes projects with clear intent'
+  'Use this window for key decisions and important conversations',
+  'Tackle your most complex or high-stakes task now',
+  'Send proposals, contracts, or critical messages during peak hours',
+  'Lead discussions or negotiate — clarity is at its highest',
+  'Start high-priority projects that need strong momentum'
 ]
 const AVOID_MSGS = [
-  'Avoid financial decisions — risk tolerance is low',
-  'Avoid high-stakes calls or commitments',
-  'Avoid reactive responses — clarity is reduced',
-  'Avoid multitasking on anything critical',
-  'Avoid impulsive choices under pressure'
+  'Do not make financial decisions — risk clarity is low',
+  'Avoid committing to new obligations or contracts',
+  'Hold off on reactive responses — revisit tomorrow with fresh eyes',
+  'Do not multitask on critical work — depth is required',
+  'Avoid impulsive choices — wait for a higher-scoring window'
 ]
 const WATCH_MSGS = [
-  'Energy dip likely — pace yourself',
-  'Decision fatigue building — take breaks',
-  'Focus may waver — remove distractions',
-  "Transition period — wrap up, don't start new things",
-  'Stress peaks around context-switching'
+  'Energy will dip — schedule breaks before it affects focus',
+  'Decision fatigue builds after midday — front-load important work',
+  'Focus may fragment — reduce context-switching',
+  'Transition zone — complete open tasks before starting new ones',
+  'Stress risk peaks during handoffs — communicate clearly'
 ]
 
 function buildSummary(r, goldenTime, avoidTime) {
@@ -60,14 +61,16 @@ function buildSummary(r, goldenTime, avoidTime) {
   )
 }
 
-function computeForUser(user, planet, lunar, dayType, transits) {
+function computeForUser(user, planet, lunar, dayType, transits, realTithi, realNaksh, realMoonSgn) {
   const seed         = buildSeed(user.dob)
   const traits       = buildTraits(user.dob)
   const lagna        = computeLagna(user.birth_time)
-  const moonSign     = computeMoonSign(user.dob)
+  const moonSign     = realMoonSgn || computeMoonSign(user.dob)
   const transitDelta = aggregateTransits(transits, lagna, moonSign)
   const domTransit   = dominantTransit(transits)
-  const slots        = scoredSlots(seed, planet, user.type, lunar, dayType, traits, lagna, moonSign, transitDelta)
+  const tithi        = realTithi || getTithi()
+  const naksh        = realNaksh || getNakshatra()
+  const slots        = scoredSlots(seed, planet, user.type, lunar, dayType, traits, lagna, moonSign, transitDelta, tithi, naksh)
   const sorted       = [...slots].sort((a, b) => b.score - a.score)
   const golden       = sorted[0]
   const worst        = sorted[sorted.length - 1]
@@ -83,7 +86,9 @@ function computeForUser(user, planet, lunar, dayType, transits) {
     ctx:       dominant,
     dimScore:  golden[dominant] ?? golden.decision,
     riskScore: golden.risk,
-    decision:  'do'
+    decision:  'do',
+    realTithi: tithi,
+    realNaksh: naksh
   })
 
   return {
@@ -112,7 +117,7 @@ function computeForUser(user, planet, lunar, dayType, transits) {
   }
 }
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).end()
 
   const body  = req.body || {}
@@ -124,18 +129,23 @@ export default function handler(req, res) {
   const lunar   = getLunarPhase()
   const dayType = getDayType()
   const transits = getTransits()
-  const members = users.map(u => computeForUser(u, planet, lunar, dayType, transits))
+  const vara    = getVara()
+
+  // Moon-cycle Panchang (deterministic, no external API needed for core values)
+  const mc      = getMoonCycle()
+  const tithi   = getTithi()          // real value preferred via panchang route separately
+  const naksh   = getMoonNakshatra(mc) // moon-cycle nakshatra
+  const moonSgn = getMoonSign(mc)      // moon sign from cycle
+  const dasha   = getMoonDasha(mc)
+
+  const members = users.map(u => computeForUser(u, planet, lunar, dayType, transits, tithi, naksh, moonSgn))
   const primary = members[0]
 
   const avgConfidence = Math.round(
     members.reduce((s, m) => s + m.confidence, 0) / members.length
   )
 
-  // Expose dominant transit in top-level response
   const domTransit = dominantTransit(transits)
-  const tithi   = getTithi()
-  const naksh   = getNakshatra()
-  const vara    = getVara()
 
   res.status(200).json({
     golden_window:      primary.golden_window,
@@ -149,6 +159,8 @@ export default function handler(req, res) {
     tithi:              tithi.tithi,
     tithi_phase:        tithi.phase,
     nakshatra:          naksh.name,
+    moon_sign:          moonSgn?.name || null,
+    dasha:              dasha,
     transit:            domTransit ? { planet: domTransit.planet, sign: domTransit.sign } : null,
     confidence_summary: avgConfidence,
     members

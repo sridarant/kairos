@@ -4,25 +4,15 @@ import AskModal from './components/AskModal'
 import ProfileModal from './components/ProfileModal'
 import InviteModal from './components/InviteModal'
 import BottomNav from './components/BottomNav'
-import { loadHistory, computeFeedbackAdj } from './lib/history'
-import { trackAppOpen } from './lib/analytics'
+import { getUserData, saveProfile, trackOpen, computeAnalytics } from './lib/dataClient'
 
 const MOCK_DAILY = {
-  golden_window: '09:00–11:00',
-  avoid_window: '17:00–19:00',
-  do: 'Tackle complex work requiring full focus',
-  avoid: '17:00–19:00 — Avoid financial decisions — risk tolerance is low',
-  watch: '13:00–15:00 — Energy dip likely — pace yourself',
-  planet: 'Mercury',
-  confidence_summary: 75,
-  members: []
-}
-
-function loadUsers() {
-  try { return JSON.parse(localStorage.getItem('kairos_users') || '[]') } catch { return [] }
-}
-function saveUsers(users) {
-  try { localStorage.setItem('kairos_users', JSON.stringify(users)) } catch {}
+  golden_window: '09:00–11:00', avoid_window: '17:00–19:00',
+  do: 'Use this window for key decisions and important conversations',
+  avoid: '17:00–19:00 — Do not make financial decisions — risk clarity is low',
+  watch: '13:00–15:00 — Energy will dip — schedule breaks before it affects focus',
+  planet: 'Mercury', lunar_phase: 'Waxing', nakshatra: 'Pushya', tithi: 8,
+  confidence_summary: 75, members: []
 }
 
 export default function App() {
@@ -31,24 +21,28 @@ export default function App() {
   const [askOpen, setAskOpen]         = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [inviteOpen, setInviteOpen]   = useState(false)
-  const [users, setUsers]             = useState(loadUsers)
-  const [feedbackAdj, setFeedbackAdj] = useState(() => computeFeedbackAdj(loadHistory()))
+  // Central data state — replaces scattered localStorage reads
+  const [userData, setUserData]       = useState(null)
 
-  useEffect(() => { trackAppOpen(); fetchDaily(users) }, [])
+  // Load all user data from API on mount
+  useEffect(() => {
+    async function init() {
+      trackOpen()
+      const data = await getUserData()
+      setUserData(data)
+      const users = data.user_profile || []
+      await fetchDaily(users, computeAnalytics(data.history))
+    }
+    init()
+  }, [])
 
-  // Recompute feedback adjustments whenever the modal closes (after possible feedback)
-  function handleAskClose() {
-    setAskOpen(false)
-    setFeedbackAdj(computeFeedbackAdj(loadHistory()))
-  }
-
-  async function fetchDaily(currentUsers) {
+  async function fetchDaily(users, feedbackAdj) {
     setLoading(true)
     try {
       const res = await fetch('/api/daily', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ users: currentUsers, feedbackAdj })
+        body: JSON.stringify({ users: users || [], feedbackAdj })
       })
       if (!res.ok) throw new Error()
       setDaily(await res.json())
@@ -59,13 +53,23 @@ export default function App() {
     }
   }
 
-  function handleSaveUsers(updated) {
-    setUsers(updated)
-    saveUsers(updated)
-    fetchDaily(updated)
+  async function handleSaveUsers(updatedUsers) {
+    await saveProfile(updatedUsers)
+    const freshData = { ...userData, user_profile: updatedUsers }
+    setUserData(freshData)
+    await fetchDaily(updatedUsers, computeAnalytics(freshData.history))
   }
 
+  // Refresh userData after ask modal closes (new history entry may exist)
+  async function handleAskClose() {
+    setAskOpen(false)
+    const data = await getUserData()
+    setUserData(data)
+  }
+
+  const users       = userData?.user_profile || []
   const primaryUser = users[0] || null
+  const feedbackAdj = computeAnalytics(userData?.history || [])
 
   return (
     <div style={{ maxWidth: 448, margin: '0 auto', minHeight: '100dvh', position: 'relative', paddingBottom: 72 }}>
@@ -73,6 +77,7 @@ export default function App() {
         daily={daily}
         loading={loading}
         primaryUser={primaryUser}
+        userData={userData}
         onProfileOpen={() => setProfileOpen(true)}
         onInvite={() => setInviteOpen(true)}
       />
