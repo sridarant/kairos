@@ -62,7 +62,7 @@ export default function ProfileModal({ onClose, users, onSave }) {
         zIndex: 50
       }}>
         {/* inner pad — bottom 80px keeps save button clear of nav */}
-        <div style={{ padding: '24px 16px 80px' }}>
+        <div style={{ padding: "24px 16px 100px" }}>
           <div style={{ width: 36, height: 4, background: 'var(--gray-3)', borderRadius: 2, margin: '0 auto 20px' }} />
           <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>Profiles</h2>
           <p style={{ fontSize: 13, color: 'var(--gray-4)', marginBottom: 20 }}>Up to {MAX_MEMBERS} members</p>

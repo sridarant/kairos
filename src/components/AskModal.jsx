@@ -7,6 +7,15 @@ const COLORS = {
   wait:  { bg: 'var(--amber-bg)', txt: 'var(--amber-txt)' }
 }
 
+const MODAL_STYLE = {
+  position: 'fixed', left: 0, right: 0, bottom: 0,
+  width: '100%', maxWidth: 448, margin: '0 auto',
+  maxHeight: '90vh', overflowY: 'auto',
+  background: 'var(--gray-1)',
+  borderRadius: '20px 20px 0 0',
+  zIndex: 50
+}
+
 export default function AskModal({ onClose, profile, feedbackAdj }) {
   const [question, setQuestion]       = useState('')
   const [context, setContext]         = useState('')
@@ -15,13 +24,11 @@ export default function AskModal({ onClose, profile, feedbackAdj }) {
   const [feedback, setFeedback]       = useState(null)
   const [actionTaken, setActionTaken] = useState(null)
   const [loading, setLoading]         = useState(false)
-  const [error, setError]             = useState(null)
 
   async function handleSubmit() {
     if (!question.trim()) return
     trackAsk()
     setLoading(true)
-    setError(null)
     setFeedback(null)
     setActionTaken(null)
     try {
@@ -30,14 +37,19 @@ export default function AskModal({ onClose, profile, feedbackAdj }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, context, profile, feedbackAdj })
       })
-      if (!res.ok) throw new Error()
+      // Always parse response — ask.js always returns 200 with fallback
       const data = await res.json()
       setResult(data)
-      // Persist to central API
       const saved = await addHistory({ question, decision: data.decision, confidence: data.confidence })
       if (saved?.id) setEntryId(saved.id)
     } catch {
-      setError('Could not get a response. Try again.')
+      // Network-level failure — show a soft fallback result
+      setResult({
+        decision: 'wait', decision_label: 'WAIT',
+        message: 'Signals are mixed today. Use caution and revisit later.',
+        balance: 'Patience is the safest move when conditions are unclear.',
+        best_time: null, avoid_time: null, confidence: 30
+      })
     } finally {
       setLoading(false)
     }
@@ -60,20 +72,6 @@ export default function AskModal({ onClose, profile, feedbackAdj }) {
 
   const colors = result ? (COLORS[result.decision] || COLORS.wait) : null
 
-  const btnRow = (
-    <div style={{ display: 'flex', gap: 8 }}>
-      <button onClick={handleAskAnother} className="scale-tap" style={{
-        flex: 1, padding: 14, background: 'var(--gray-2)', border: 'none',
-        borderRadius: 12, color: '#fff', fontSize: 15, cursor: 'pointer', fontFamily: 'inherit'
-      }}>Ask Another</button>
-      <button onClick={onClose} className="scale-tap" style={{
-        flex: 1, padding: 14, background: 'var(--yellow)', border: 'none',
-        borderRadius: 12, color: '#000', fontSize: 15, fontWeight: 600,
-        cursor: 'pointer', fontFamily: 'inherit'
-      }}>Done</button>
-    </div>
-  )
-
   const smBtn = (label, onClick) => (
     <button onClick={onClick} style={{
       flex: 1, padding: '10px 0', border: 'none', borderRadius: 10,
@@ -88,12 +86,10 @@ export default function AskModal({ onClose, profile, feedbackAdj }) {
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
         backdropFilter: 'blur(4px)', zIndex: 40
       }} />
-      <div className="slide-up" style={{
-        position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
-        width: '100%', maxWidth: 448, background: 'var(--gray-1)',
-        borderRadius: '20px 20px 0 0', maxHeight: '90dvh', overflowY: 'auto', zIndex: 50
-      }}>
-        <div style={{ padding: '24px 16px 40px' }}>
+
+      <div style={MODAL_STYLE} className="slide-up">
+        {/* inner content — padding-bottom keeps buttons above safe area */}
+        <div style={{ padding: '24px 16px 100px' }}>
           <div style={{ width: 36, height: 4, background: 'var(--gray-3)', borderRadius: 2, margin: '0 auto 20px' }} />
           <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>Ask Kairos</h2>
           {profile?.name && <p style={{ fontSize: 13, color: 'var(--gray-4)', marginBottom: 16 }}>for {profile.name}</p>}
@@ -105,15 +101,14 @@ export default function AskModal({ onClose, profile, feedbackAdj }) {
                 placeholder="What decision are you facing?" rows={3} style={{
                   width: '100%', background: 'var(--gray-2)', border: 'none', borderRadius: 12,
                   color: '#fff', fontSize: 15, padding: 14, resize: 'none', outline: 'none',
-                  marginBottom: 10, fontFamily: 'inherit'
+                  marginBottom: 10, fontFamily: 'inherit', boxSizing: 'border-box'
                 }} />
               <textarea value={context} onChange={e => setContext(e.target.value)}
                 placeholder="Any context? (optional)" rows={2} style={{
                   width: '100%', background: 'var(--gray-2)', border: 'none', borderRadius: 12,
                   color: '#fff', fontSize: 15, padding: 14, resize: 'none', outline: 'none',
-                  marginBottom: 16, fontFamily: 'inherit'
+                  marginBottom: 16, fontFamily: 'inherit', boxSizing: 'border-box'
                 }} />
-              {error && <p style={{ color: 'var(--red-txt)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
               <button onClick={handleSubmit} disabled={loading || !question.trim()} className="scale-tap" style={{
                 width: '100%', padding: '14px',
                 background: question.trim() ? 'var(--yellow)' : 'var(--gray-3)',
@@ -121,14 +116,13 @@ export default function AskModal({ onClose, profile, feedbackAdj }) {
                 border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 600,
                 cursor: question.trim() ? 'pointer' : 'default',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                fontFamily: 'inherit'
+                fontFamily: 'inherit', boxSizing: 'border-box'
               }}>
                 {loading ? <><span className="spinner" /> Thinking…</> : 'Get Guidance'}
               </button>
             </>
           ) : (
             <div className="fade-in">
-              {/* Decision card */}
               <div style={{ background: colors.bg, borderRadius: 12, padding: 16, marginBottom: 12 }}>
                 <p style={{ fontSize: 11, color: colors.txt, fontWeight: 700, marginBottom: 6, letterSpacing: '0.06em' }}>
                   {result.decision_label || result.decision?.toUpperCase()}
@@ -146,7 +140,6 @@ export default function AskModal({ onClose, profile, feedbackAdj }) {
                 )}
               </div>
 
-              {/* Timing */}
               {(result.best_time || result.avoid_time) && (
                 <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                   {result.best_time && (
@@ -160,6 +153,22 @@ export default function AskModal({ onClose, profile, feedbackAdj }) {
                       <p style={{ fontSize: 11, color: 'var(--red-txt)', marginBottom: 2 }}>AVOID</p>
                       <p style={{ fontSize: 13, fontWeight: 600 }}>{result.avoid_time}</p>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* Astro context pill */}
+              {(result.nakshatra || result.moon_sign) && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {result.nakshatra && (
+                    <span style={{ background: 'var(--gray-2)', borderRadius: 20, padding: '4px 10px', fontSize: 11, color: '#ccc' }}>
+                      ✨ {result.nakshatra}
+                    </span>
+                  )}
+                  {result.moon_sign && (
+                    <span style={{ background: 'var(--gray-2)', borderRadius: 20, padding: '4px 10px', fontSize: 11, color: '#ccc' }}>
+                      🌙 {result.moon_sign}
+                    </span>
                   )}
                 </div>
               )}
@@ -194,7 +203,17 @@ export default function AskModal({ onClose, profile, feedbackAdj }) {
                 </p>
               )}
 
-              {btnRow}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={handleAskAnother} className="scale-tap" style={{
+                  flex: 1, padding: 14, background: 'var(--gray-2)', border: 'none',
+                  borderRadius: 12, color: '#fff', fontSize: 15, cursor: 'pointer', fontFamily: 'inherit'
+                }}>Ask Another</button>
+                <button onClick={onClose} className="scale-tap" style={{
+                  flex: 1, padding: 14, background: 'var(--yellow)', border: 'none',
+                  borderRadius: 12, color: '#000', fontSize: 15, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: 'inherit'
+                }}>Done</button>
+              </div>
             </div>
           )}
         </div>

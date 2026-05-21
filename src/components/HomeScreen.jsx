@@ -149,6 +149,34 @@ function PremiumSection() {
   )
 }
 
+
+function DebugPanel({ daily }) {
+  if (!daily?.members?.[0]?._debug) return null
+  const d = daily.members[0]._debug
+  return (
+    <div style={{ marginTop: 4 }}>
+      <div style={{ background: 'var(--gray-2)', borderRadius: 12, padding: 14, marginBottom: 8 }}>
+        <p style={{ fontSize: 12, color: 'var(--gray-4)', marginBottom: 8 }}>Golden window: <span style={{color:'#ccc'}}>{d.golden_window}</span> (score: {d.score?.toFixed?.(2)})</p>
+        {d.dims && (
+          <p style={{ fontSize: 11, color: 'var(--gray-4)', marginBottom: 8 }}>
+            D:{d.dims.d?.toFixed?.(2)} C:{d.dims.c?.toFixed?.(2)} R:{d.dims.r?.toFixed?.(2)} F:{d.dims.f?.toFixed?.(2)}
+          </p>
+        )}
+        {d.layers && Object.entries(d.layers).map(([k, v]) => (
+          <p key={k} style={{ fontSize: 10, color: 'var(--gray-4)', lineHeight: 1.4 }}>
+            <span style={{color:'#888'}}>{k}:</span> d{v.d>0?'+':''}{v.d} c{v.c>0?'+':''}{v.c} r{v.r>0?'+':''}{v.r} f{v.f>0?'+':''}{v.f}
+          </p>
+        ))}
+      </div>
+      {daily.certainty_factor && daily.certainty_factor < 1 && (
+        <p style={{ fontSize: 11, color: 'var(--amber-txt)', textAlign: 'center' }}>
+          Future date certainty: {Math.round(daily.certainty_factor * 100)}%
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function HomeScreen({ daily, loading, primaryUser, userData, onProfileOpen, onInvite }) {
   const [version, setVersion] = useState(null)
   useEffect(() => { fetch('/version.json').then(r => r.json()).then(v => setVersion(v.version)).catch(() => {}) }, [])
@@ -216,6 +244,7 @@ export default function HomeScreen({ daily, loading, primaryUser, userData, onPr
         )}
         <DecisionTimeline history={history} />
       </Collapsible>
+      <Collapsible label="Debug" emoji="🔧"><DebugPanel daily={daily} /></Collapsible>
       <Collapsible label="Coming Soon" emoji="🔒"><PremiumSection /></Collapsible>
 
       <div style={{ marginTop: 24, paddingBottom: 8, textAlign: 'center' }}>
