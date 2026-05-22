@@ -9,6 +9,7 @@ import { fetchPlanetaryPositions, aggregateTransits,
 import { computeInteraction }                        from '../lib/astro/interactions.js'
 import { scoredSlots, toConfidence, buildDebugBreakdown,
          getTypeBoost, WEIGHTS }                     from '../lib/astro/scoring.js'
+import { buildBirthChart, buildChartSummary, HOUSES }  from '../lib/astro/chart.js'
 
 // ─── Birth data helpers ───────────────────────────────────────────────────────
 export function computeLagna(birthTime) {
@@ -74,6 +75,10 @@ export function scoreForUser(user, astroCtx) {
   const transitDelta = aggregateTransits(transits, lagna?.name, moonSign?.name)
   const interactions = computeInteraction(varaPlanet.name, dasha, lagna?.name)
 
+  // Birth chart: house effects from planet positions relative to Lagna
+  const birthChart   = buildBirthChart(user.birth_time || null, transits)
+  const chartEffects = birthChart.houseEffects
+
   const astroLayers = {
     vara:        { d: varaPlanet.d||0, c: varaPlanet.c||0, r: varaPlanet.r||0, f: varaPlanet.f||0 },
     lunar:       { d: lunarPhase.d||0, c:0, r: lunarPhase.r||0, f: lunarPhase.f||0 },
@@ -82,7 +87,8 @@ export function scoreForUser(user, astroCtx) {
     transits:    transitDelta,
     interactions,
     lagna,
-    moonSign
+    moonSign,
+    chartEffects
   }
 
   const slots   = scoredSlots(astroLayers, { seed, typeBoost })
@@ -101,6 +107,10 @@ export function scoreForUser(user, astroCtx) {
     transitDelta, domTransit: domT,
     reasoning: {
       planet:           varaPlanet.name,
+      lagnaSign:        lagna?.name || (birthChart.lagna?.name || null),
+      planetHouses:     birthChart.planetHouses || {},
+      chartSummary:     buildChartSummary(birthChart),
+      houseBreakdown:   chartEffects.breakdown || {},
       planetCultural:   PLANET_CULTURAL[varaPlanet.name] || varaPlanet.name,
       planetReasoning:  PLANET_REASONING[varaPlanet.name] || '',
       dashaLabel:       `${dasha} Dasha (${PLANET_CULTURAL[dasha] || dasha})`,

@@ -34,16 +34,17 @@ const SUMMARIES = [
 function buildSummary(scored, reasoning, golden, worst) {
   const traitHint = ''
   const riskFlag  = scored.worst.dims.r > 1 ? ' Manage risk carefully.' : ''
-  const cultural  = `${reasoning.dashaLabel} — ${reasoning.planetReasoning}; ${reasoning.nakshatraCultural} (${reasoning.nakshatraLabel}).`
-  const birthNote = [
-    reasoning.lagnaSign   ? `Lagna in ${reasoning.lagnaSign}`     : '',
-    reasoning.moonSignName ? `Moon in ${reasoning.moonSignName}`   : ''
+  const cultural   = `${reasoning.dashaLabel} — ${reasoning.planetReasoning}; ${reasoning.nakshatraCultural} (${reasoning.nakshatraLabel}).`
+  const chartNote  = reasoning.chartSummary ? ` ${reasoning.chartSummary}.` : ''
+  const birthNote  = [
+    reasoning.lagnaSign    ? `Lagna in ${reasoning.lagnaSign}`    : '',
+    reasoning.moonSignName ? `Moon in ${reasoning.moonSignName}`  : ''
   ].filter(Boolean).join(', ')
   const birthLine = birthNote ? ` ${birthNote} shapes your personal alignment.` : ''
   return (
     `Use your ${golden.time} window for key decisions and important actions. ` +
     `Avoid starting new commitments after ${worst.time}. ` +
-    `${cultural}${birthLine}${riskFlag}${traitHint}`
+    `${cultural}${birthLine}${chartNote}${riskFlag}${traitHint}`
   )
 }
 
@@ -78,7 +79,7 @@ export default async function handler(req, res) {
       watch:         `${medium.time} — ` + WATCH_MSGS[(Math.abs(seed)+2) % WATCH_MSGS.length],
       confidence:    adj,
       _reasoning:    reasoning,
-      _debug:        debug
+      _debug:        { ...debug, lagna: scored.lagna, planetHouses: scored.reasoning?.planetHouses, chartSummary: scored.reasoning?.chartSummary, houseBreakdown: scored.reasoning?.houseBreakdown }
     }
   })
 

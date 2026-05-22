@@ -156,30 +156,71 @@ function DebugPanel({ daily }) {
   return (
     <div style={{ marginTop: 4 }}>
       <div style={{ background: 'var(--gray-2)', borderRadius: 12, padding: 14, marginBottom: 8 }}>
-        <p style={{ fontSize: 12, color: 'var(--gray-4)', marginBottom: 8 }}>Golden window: <span style={{color:'#ccc'}}>{d.golden_window}</span> (score: {d.score?.toFixed?.(2)})</p>
+        <p style={{ fontSize: 12, color: 'var(--gray-4)', marginBottom: 6 }}>
+          Window: <span style={{color:'#ccc'}}>{d.golden_window}</span> (score: {d.score?.toFixed?.(2)})
+        </p>
         {d.dims && (
-          <p style={{ fontSize: 11, color: 'var(--gray-4)', marginBottom: 8 }}>
+          <p style={{ fontSize: 11, color: 'var(--gray-4)', marginBottom: 6 }}>
             D:{d.dims.d?.toFixed?.(2)} C:{d.dims.c?.toFixed?.(2)} R:{d.dims.r?.toFixed?.(2)} F:{d.dims.f?.toFixed?.(2)}
           </p>
         )}
-        {d.layers && Object.entries(d.layers).map(([k, v]) => (
-          <p key={k} style={{ fontSize: 10, color: 'var(--gray-4)', lineHeight: 1.4 }}>
-            <span style={{color:'#888'}}>{k}:</span> d{v.d>0?'+':''}{v.d} c{v.c>0?'+':''}{v.c} r{v.r>0?'+':''}{v.r} f{v.f>0?'+':''}{v.f}
+        {d.lagna && <p style={{ fontSize: 11, color: '#facc15', marginBottom: 4 }}>Lagna: {d.lagna.name}</p>}
+        {d.chartSummary && <p style={{ fontSize: 11, color: 'var(--gray-4)', marginBottom: 6, lineHeight: 1.4 }}>{d.chartSummary}</p>}
+        {d.houseBreakdown && Object.entries(d.houseBreakdown).map(([k, v]) => (
+          <p key={k} style={{ fontSize: 10, color: '#888', lineHeight: 1.4 }}>
+            {k}: {v.note}
           </p>
         ))}
+        {d.layers && <p style={{ fontSize: 10, color: '#555', marginTop: 6 }}>Layers: {Object.keys(d.layers).join(' · ')}</p>}
       </div>
       {daily.certainty_factor && daily.certainty_factor < 1 && (
         <p style={{ fontSize: 11, color: 'var(--amber-txt)', textAlign: 'center' }}>
-          Future date certainty: {Math.round(daily.certainty_factor * 100)}%
+          Future certainty: {Math.round(daily.certainty_factor * 100)}%
         </p>
       )}
     </div>
   )
 }
 
+function InstallBanner({ onDismiss }) {
+  function handleInstall() {
+    if (window.__installPrompt) {
+      window.__installPrompt.prompt()
+      window.__installPrompt.userChoice.then(() => { window.__installPrompt = null; onDismiss() })
+    } else {
+      onDismiss()
+    }
+  }
+  return (
+    <div style={{ background: 'var(--gray-2)', borderRadius: 12, padding: '12px 14px', marginBottom: 12,
+      display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ flex: 1 }}>
+        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Add Kairos to Home Screen</p>
+        <p style={{ fontSize: 12, color: 'var(--gray-4)' }}>For the best daily guidance experience</p>
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button onClick={handleInstall} style={{
+          background: 'var(--yellow)', border: 'none', borderRadius: 10, padding: '7px 12px',
+          fontSize: 12, fontWeight: 700, color: '#000', cursor: 'pointer', fontFamily: 'inherit'
+        }}>Install</button>
+        <button onClick={onDismiss} style={{
+          background: 'none', border: 'none', color: 'var(--gray-4)', fontSize: 16,
+          cursor: 'pointer', padding: '0 4px'
+        }}>✕</button>
+      </div>
+    </div>
+  )
+}
+
 export default function HomeScreen({ daily, loading, primaryUser, userData, onProfileOpen, onInvite }) {
-  const [version, setVersion] = useState(null)
-  useEffect(() => { fetch('/version.json').then(r => r.json()).then(v => setVersion(v.version)).catch(() => {}) }, [])
+  const [version, setVersion]       = useState(null)
+  const [showInstall, setShowInstall] = useState(false)
+  useEffect(() => {
+    fetch('/version.json').then(r => r.json()).then(v => setVersion(v.version)).catch(() => {})
+    const onInstallable = () => setShowInstall(true)
+    window.addEventListener('installable', onInstallable)
+    return () => window.removeEventListener('installable', onInstallable)
+  }, [])
 
   const history    = userData?.history || []
   const analytics  = computeAnalytics(history)
@@ -213,6 +254,7 @@ export default function HomeScreen({ daily, loading, primaryUser, userData, onPr
   return (
     <div style={{ padding: 16, paddingTop: 56 }}>
       {header}
+      {showInstall && <InstallBanner onDismiss={() => setShowInstall(false)} />}
       <TopSection dominant={dominant} planet={daily.planet} lunarPhase={daily.lunar_phase} nakshatra={daily.nakshatra} tithi={daily.tithi} />
       <WindowTrigger goldenWindow={daily.golden_window} />
 
