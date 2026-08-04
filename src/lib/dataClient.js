@@ -142,3 +142,7 @@ export function minsUntilWindow(windowStr) {
   const diff = Math.round((then - now) / 60000)
   return diff > 0 ? diff : null
 }
+
+export async function trackFeedback(category, action, outcome) {
+  return apiPost('track_feedback', { category, action, outcome })
+}

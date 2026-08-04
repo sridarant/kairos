@@ -1,142 +1,192 @@
-// /api/astro.js — Astro API abstraction layer (v17.0)
-// Orchestrates panchang.js, planets.js, scoring.js, interactions.js.
+/**
+ * /api/astro.js  v22.0
+ * Orchestration layer: connects Layer 1 (astronomy), Layer 2 (astrology),
+ * and Layer 3 (decision engine).
+ *
+ * This file may call lib/astronomy/ and lib/astrology/ but
+ * contains NO astronomical calculations and NO interpretation rules itself.
+ * It only ASSEMBLES results.
+ */
 
-import { fetchPanchang, getMoonCycle, getNakshatraByIndex, getMoonSignFromCycle,
-         getDashaFromCycle, getLunarPhaseData }     from '../lib/astro/panchang.js'
-import { fetchPlanetaryPositions, aggregateTransits,
-         dominantTransit, ZODIAC, ZODIAC_NAMES, PLANET_REASONING,
-         PLANET_CULTURAL, PLANET_DEFS }              from '../lib/astro/planets.js'
-import { computeInteraction }                        from '../lib/astro/interactions.js'
-import { scoredSlots, toConfidence, buildDebugBreakdown,
-         getTypeBoost, WEIGHTS }                     from '../lib/astro/scoring.js'
-import { buildBirthChart, buildChartSummary, HOUSES }  from '../lib/astro/chart.js'
+import { toJD, computeGrahaPositions, computeLagna as calcLagna,
+         computePanchang, nakshatra }                               from '../lib/astronomy/ephemeris.js'
+import { computeHouses, computePlanetHouses }                       from '../lib/astronomy/houses.js'
+import { assessPlanetStrength, RULERSHIP }                          from '../lib/astrology/strength.js'
+import { detectAllYogas }                                            from '../lib/astrology/yogas.js'
+import { computeVimshottariDasha, dashaFromToday, DASHA_SEQUENCE }  from '../lib/astrology/dasha.js'
+import { tithiEffect, nakshatraEffect, planetaryEffect, yogaEffect } from '../lib/astrology/scoring.js'
 
-// ─── Birth data helpers ───────────────────────────────────────────────────────
-export function computeLagna(birthTime) {
-  if (!birthTime) return null
-  const h = parseInt(birthTime.split(':')[0], 10)
-  if (isNaN(h)) return null
-  const idx = Math.floor(h / 2) % 12
-  return { name: ZODIAC_NAMES[idx], ...ZODIAC[idx] }
+// ─── Per-process cache ────────────────────────────────────────────────────────
+// Astronomical calculations for the same JD are expensive — cache them.
+let _cache = { key: null, data: null }
+
+function cacheKey(jd) { return Math.floor(jd * 24) }   // changes every hour
+
+function cachedGrahas(jd) {
+  const k = cacheKey(jd)
+  if (_cache.key === k) return _cache.data
+  const data = computeGrahaPositions(jd)
+  _cache = { key: k, data }
+  return data
+}
+
+// ─── Date → JD helper ──────────────────────────────────────────────────────────
+function nowJD() {
+  const n = new Date()
+  return toJD(n.getFullYear(), n.getMonth() + 1, n.getDate(), n.getHours() + n.getMinutes() / 60)
+}
+
+function parseDoB(dob) {
+  // Accepts DD-MM-YYYY or YYYY-MM-DD
+  if (!dob) return null
+  const parts = dob.split('-')
+  if (parts.length !== 3) return null
+  let [a, b, c] = parts.map(Number)
+  // Detect format: if first part > 31 → YYYY-MM-DD
+  if (a > 31) return new Date(a, b - 1, c)
+  return new Date(c, b - 1, a)   // DD-MM-YYYY
+}
+
+// ─── Lagna from birth time ─────────────────────────────────────────────────────
+export function computeLagna(birthTime, dob) {
+  if (!birthTime || !dob) return null
+  const bd = parseDoB(dob)
+  if (!bd) return null
+  const [h, m = 0] = birthTime.split(':').map(Number)
+  const jd = toJD(bd.getFullYear(), bd.getMonth() + 1, bd.getDate(), h + m / 60)
+  return calcLagna(jd, 13)  // default lat 13°N (Bangalore — South India approximation)
 }
 
 export function buildSeed(dob) {
-  const dateNum = new Date().getDate()
-  const dobDay  = dob ? parseInt((dob.split('-')[2] || dob.split('/')[1] || '0'), 10) : 0
-  return dateNum + (dobDay || 0)
+  const dobDay = dob ? parseInt((dob.split('-')[0] || '0'), 10) : new Date().getDate()
+  return new Date().getDate() + dobDay
 }
 
-export function buildTraits(dob) {
-  const dobDay = dob ? parseInt((dob.split('-')[2] || dob.split('/')[1] || '0'), 10) : new Date().getDate()
-  return {
-    decision_bias:       ((dobDay % 3) - 1),
-    risk_tolerance:      (((dobDay + 1) % 3) - 1),
-    communication_style: (dobDay % 2),
-    focus_strength:      (((dobDay + 2) % 3) - 1)
-  }
-}
-
-// ─── Full context builder ─────────────────────────────────────────────────────
+// ─── Full astrological context for one date ────────────────────────────────────
 export async function getFullAstroContext(daysAhead = 0) {
-  const [panchang, positions] = await Promise.all([
-    fetchPanchang(),
-    fetchPlanetaryPositions()
-  ])
+  const targetDate = new Date()
+  if (daysAhead > 0) targetDate.setDate(targetDate.getDate() + daysAhead)
 
-  const { nakshatra, tithi, moonSign: moonSignName, dasha, lunarPhase, moonCycle } = panchang
-  const { transits, varaPlanet } = positions
+  const jd     = toJD(targetDate.getFullYear(), targetDate.getMonth() + 1, targetDate.getDate(), 12)
+  const grahas  = cachedGrahas(jd)
+  const panchang = computePanchang(jd)
 
-  // Resolve moonSign as zodiac object
-  const moonSignIdx = ZODIAC_NAMES.indexOf(moonSignName)
-  const moonSignObj = moonSignIdx >= 0 ? { name: moonSignName, ...ZODIAC[moonSignIdx] } : null
+  const { nakshatra: moonNak, tithi, yoga: panchangYoga, vara } = panchang
 
   const certaintyFactor = daysAhead === 0 ? 1.0 : daysAhead <= 3 ? 0.85 : 0.70
 
-  return {
-    panchang, positions,
-    nakshatra, tithi, moonSign: moonSignObj, dasha,
-    lunarPhase, moonCycle,
-    varaPlanet, transits,
-    certaintyFactor, daysAhead,
-    PLANET_REASONING, PLANET_CULTURAL
-  }
+  return { jd, grahas, panchang, moonNak, tithi, vara, certaintyFactor, daysAhead }
 }
 
-// ─── Per-user scoring ─────────────────────────────────────────────────────────
+// ─── Per-user chart scoring ────────────────────────────────────────────────────
 export function scoreForUser(user, astroCtx) {
-  const { nakshatra, tithi, moonSign, lunarPhase, varaPlanet,
-          transits, dasha, PLANET_REASONING } = astroCtx
+  const { jd, grahas, panchang } = astroCtx
+  const { moonNak, tithi, vara } = panchang
 
-  const seed     = buildSeed(user.dob)
-  const traits   = buildTraits(user.dob)
-  const lagna    = computeLagna(user.birth_time)
-  const typeBoost = getTypeBoost(user.type)
+  // Birth chart (requires birth time + dob for full chart)
+  const lagna = computeLagna(user.birth_time, user.dob)
+  const lagnaSignIdx = lagna?.sign ?? null
 
-  const transitDelta = aggregateTransits(transits, lagna?.name, moonSign?.name)
-  const interactions = computeInteraction(varaPlanet.name, dasha, lagna?.name)
+  const planetHouses = (lagna && grahas)
+    ? computePlanetHouses(grahas, lagna.sidLon)
+    : {}
 
-  // Birth chart: house effects from planet positions relative to Lagna
-  const birthChart   = buildBirthChart(user.birth_time || null, transits)
-  const chartEffects = birthChart.houseEffects
+  // Yogas
+  const yogas = detectAllYogas(grahas, planetHouses, lagnaSignIdx)
 
-  const astroLayers = {
-    vara:        { d: varaPlanet.d||0, c: varaPlanet.c||0, r: varaPlanet.r||0, f: varaPlanet.f||0 },
-    lunar:       { d: lunarPhase.d||0, c:0, r: lunarPhase.r||0, f: lunarPhase.f||0 },
-    tithi,
-    nakshatra,
-    transits:    transitDelta,
-    interactions,
-    lagna,
-    moonSign,
-    chartEffects
+  // Planetary strengths
+  const strengths = {}
+  for (const [name, pos] of Object.entries(grahas)) {
+    strengths[name] = assessPlanetStrength(name, pos, grahas.Sun?.sidLon || 0)
   }
 
-  const slots   = scoredSlots(astroLayers, { seed, typeBoost })
-  const sorted  = [...slots].sort((a, b) => b.score - a.score)
-  const golden  = sorted[0]
-  const worst   = sorted[sorted.length - 1]
-  const medium  = [...slots].sort((a, b) => Math.abs(a.score) - Math.abs(b.score))[0]
-  const confidence = toConfidence(golden.score, worst.score)
-  const debug   = buildDebugBreakdown(slots)
-  const domT    = dominantTransit(transits)
+  // Dasha
+  let dasha = null
+  const bd   = parseDoB(user.dob)
+  if (bd && moonNak) {
+    const moonLonInNak = grahas.Moon?.sidLon % (360 / 27) || 0
+    dasha = computeVimshottariDasha(moonNak.index, moonLonInNak, bd)
+  } else if (moonNak) {
+    dasha = { currentLord: dashaFromToday(moonNak.index), currentSub: 'Unknown', elapsedYears:0, remainingYears:17 }
+  }
+
+  // ── Aggregate dimension scores from all astrological layers ────────────────
+  const agg = { d:0, c:0, r:0, f:0 }
+  const notes = []
+
+  // 1. Tithi effect
+  const te = tithiEffect(tithi.name, tithi.phase)
+  agg.d += te.d * 0.10; agg.c += 0; agg.r += te.r * 0.10; agg.f += te.f * 0.10
+  if (te.label) notes.push(te.label)
+
+  // 2. Nakshatra effect
+  const ne = nakshatraEffect(moonNak?.name)
+  agg.d += ne.d * 0.15; agg.c += ne.c * 0.15; agg.r += ne.r * 0.15; agg.f += ne.f * 0.15
+  if (ne.label) notes.push(ne.label)
+
+  // 3. Vara (weekday lord) effect
+  const varaLordStrength = strengths[vara] || null
+  const ve = planetaryEffect(vara, varaLordStrength?.effectiveScore || 3, null)
+  agg.d += ve.d * 0.10; agg.c += ve.c * 0.10; agg.r += ve.r * 0.10; agg.f += ve.f * 0.10
+
+  // 4. Transit Moon effect (Moon's position reflects daily mood)
+  const moonStr = strengths['Moon']
+  const me = planetaryEffect('Moon', moonStr?.effectiveScore || 3, planetHouses['Moon'] || null)
+  agg.d += me.d * 0.20; agg.c += me.c * 0.20; agg.r += me.r * 0.20; agg.f += me.f * 0.20
+
+  // 5. Transit Mercury (communication)
+  const mercStr = strengths['Mercury']
+  const merc = planetaryEffect('Mercury', mercStr?.effectiveScore || 3, planetHouses['Mercury'] || null)
+  agg.d += merc.d * 0.08; agg.c += merc.c * 0.08; agg.r += merc.r * 0.08; agg.f += merc.f * 0.08
+
+  // 6. Transit Jupiter (overall wisdom)
+  const jupStr = strengths['Jupiter']
+  const je = planetaryEffect('Jupiter', jupStr?.effectiveScore || 3, planetHouses['Jupiter'] || null)
+  agg.d += je.d * 0.10; agg.c += je.c * 0.10; agg.r += je.r * 0.10; agg.f += je.f * 0.10
+
+  // 7. Yoga modifiers
+  for (const y of yogas) {
+    const yeff = yogaEffect(y)
+    agg.d += yeff.d * 0.05; agg.c += yeff.c * 0.05; agg.r += yeff.r * 0.05; agg.f += yeff.f * 0.05
+    if (yeff.note) notes.push(yeff.note)
+  }
+
+  // 8. Dasha influence (Mahadasha lord)
+  if (dasha?.currentLord) {
+    const dashaStr = strengths[dasha.currentLord]
+    const de = planetaryEffect(dasha.currentLord, dashaStr?.effectiveScore || 3, null)
+    agg.d += de.d * 0.15; agg.c += de.c * 0.15; agg.r += de.r * 0.15; agg.f += de.f * 0.15
+  }
 
   return {
-    golden, worst, medium, slots,
-    confidence, debug,
-    lagna, moonSign, traits, interactions,
-    transitDelta, domTransit: domT,
+    agg, notes, lagna, lagnaSignIdx, planetHouses, yogas, strengths, dasha,
     reasoning: {
-      planet:           varaPlanet.name,
-      lagnaSign:        lagna?.name || (birthChart.lagna?.name || null),
-      planetHouses:     birthChart.planetHouses || {},
-      chartSummary:     buildChartSummary(birthChart),
-      houseBreakdown:   chartEffects.breakdown || {},
-      planetCultural:   PLANET_CULTURAL[varaPlanet.name] || varaPlanet.name,
-      planetReasoning:  PLANET_REASONING[varaPlanet.name] || '',
-      dashaLabel:       `${dasha} Dasha (${PLANET_CULTURAL[dasha] || dasha})`,
-      nakshatraName:    nakshatra.name,
-      nakshatraCultural: nakshatra.cultural,
-      nakshatraLabel:   nakshatra.label,
-      moonSignName:     moonSign?.name || null,
-      lunarPhase:       lunarPhase.name,
-      tithi:            tithi.tithi,
-      tithiLabel:       tithi.label,
-      interactNote:     interactions.note,
-      lagnaSign:        lagna?.name || null,
-      transitLabel:     domT ? `${domT.planet} transiting ${domT.sign}` : null,
-      weights:          WEIGHTS
+      tithi:       tithi.name,
+      tithiPhase:  tithi.phase,
+      nakshatra:   moonNak?.name,
+      nakshatraLabel: ne.label,
+      nakshatraCultural: moonNak?.name,
+      vara,
+      moonInSign:  grahas.Moon?.signName,
+      dashaPlanet: dasha?.currentLord,
+      dashaLabel:  dasha?.currentLord ? `${dasha.currentLord} Dasha / ${dasha.currentSub} Antardasha` : null,
+      yogaNames:   yogas.map(y => y.name),
+      notes
     }
   }
 }
 
-// ─── GET /api/astro handler ───────────────────────────────────────────────────
+// ─── GET /api/astro handler ────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
   const daysAhead = Math.max(0, Math.min(7, parseInt(req.query.days || '0', 10) || 0))
   try {
     const ctx = await getFullAstroContext(daysAhead)
-    return res.status(200).json({ panchang: ctx.panchang, positions: ctx.positions, certaintyFactor: ctx.certaintyFactor })
-  } catch {
-    return res.status(500).json({ error: 'astro_error' })
+    return res.status(200).json({
+      panchang:       ctx.panchang,
+      certaintyFactor: ctx.certaintyFactor
+    })
+  } catch (e) {
+    return res.status(500).json({ error: 'astro_error', message: e.message })
   }
 }

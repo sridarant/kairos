@@ -191,6 +191,20 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true })
       }
 
+      case 'track_feedback': {
+        // Learning engine: store recommendation feedback (helpful/not_helpful/skipped)
+        const fb = {
+          id:         Date.now(),
+          category:   body.category,
+          action:     body.action,
+          outcome:    body.outcome,   // 'helpful' | 'not_helpful' | 'skipped'
+          timestamp:  new Date().toISOString()
+        }
+        record.feedback = [fb, ...(record.feedback || [])].slice(0, 100)
+        setRecord(userId, record)
+        return res.status(200).json({ ok: true })
+      }
+
       default:
         return res.status(400).json({ error: 'unknown action' })
     }

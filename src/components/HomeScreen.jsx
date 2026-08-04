@@ -1,296 +1,381 @@
 import { useEffect, useState } from 'react'
 import Logo from './Logo'
-import { computeInsight, computeAnalytics, minsUntilWindow } from '../lib/dataClient'
+import { minsUntilWindow } from '../lib/dataClient'
 
 const PLANET_SYMBOL = { Sun:'☀️', Moon:'🌙', Mars:'♂️', Mercury:'☿', Jupiter:'♃', Venus:'♀️', Saturn:'♄' }
-const LUNAR_LABEL   = { Waxing:'Light', Full:'Full', Waning:'Fading', Dark:'Dark' }
-const FOCUS_MAP     = { communication:'Conversations', decision:'Decisions', focus:'Deep Work', risk:'Caution', default:'Reflection' }
-const OUTCOME_ICON  = { success:'✅', fail:'❌' }
-const DEC_LABEL     = { do:'DO', avoid:'AVOID', wait:'WAIT' }
 
-function signalStrength(confidence) {
-  if (confidence >= 70) return { icon: '🟢', label: 'Strong signal' }
-  if (confidence >= 45) return { icon: '🟡', label: 'Moderate signal' }
-  return { icon: '🔴', label: 'Weak signal' }
-}
-
-function buildTagLine(planet, lunarPhase, nakshatra, tithi) {
-  const influence = { Sun:'drives decisions', Moon:'heightens intuition', Mars:'fuels bold action',
-    Mercury:'sharpens communication', Jupiter:'expands clarity', Venus:'eases dialogue', Saturn:'demands patience' }
-  const parts = []
-  if (planet)    parts.push(`${planet} ${influence[planet] || 'shapes the day'}`)
-  if (nakshatra) parts.push(`${nakshatra} adds its character`)
-  if (tithi) {
-    const phase = tithi <= 5 ? 'an opening phase' : tithi <= 15 ? 'a peak phase' : tithi <= 20 ? 'a declining phase' : 'a closure phase'
-    parts.push(`Tithi ${tithi} marks ${phase}`)
-  }
-  return parts.length ? parts.join(', ') + '.' : null
-}
-
-function TopSection({ dominant, planet, lunarPhase, nakshatra, tithi }) {
-  const focusLabel  = FOCUS_MAP[dominant] || FOCUS_MAP.default
-  const phaseLabel  = LUNAR_LABEL[lunarPhase] || lunarPhase || 'Phase'
-  const tagLine     = buildTagLine(planet, lunarPhase, nakshatra, tithi)
+function Stars({ count, size = 14 }) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <p style={{ fontSize: 11, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Today's Focus</p>
-      <p style={{ fontSize: 32, fontWeight: 700, color: 'var(--white)', lineHeight: 1.1, marginBottom: 12 }}>{focusLabel}</p>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: tagLine ? 10 : 0 }}>
-        {[
-          planet    && { emoji: PLANET_SYMBOL[planet] || '✦', text: planet },
-          lunarPhase && { emoji: '🌙',  text: phaseLabel },
-          nakshatra  && { emoji: '✨',   text: nakshatra },
-          tithi      && { emoji: '🌗',   text: `Tithi ${tithi}` }
-        ].filter(Boolean).map((t, i) => (
-          <span key={i} style={{ background: 'var(--gray-2)', border: '1px solid var(--gray-3)', borderRadius: 20,
-            padding: '5px 11px', fontSize: 13, color: '#ccc', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+    <span style={{ fontSize: size, letterSpacing: 1 }}>
+      {Array.from({ length: 5 }, (_, i) => (
+        <span key={i} style={{ opacity: i < count ? 1 : 0.2 }}>★</span>
+      ))}
+    </span>
+  )
+}
+
+// ─── Section 1: Greeting + Rating ─────────────────────────────────────────────
+function GreetingSection({ primaryUser, daily }) {
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const name = primaryUser?.name?.split(' ')[0] || null
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>
+        {greeting}{name ? `, ${name}` : ''}
+      </h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Stars count={daily?.stars || 3} size={18} />
+        {daily?.focus && (
+          <span style={{ fontSize: 13, color: 'var(--yellow)', fontWeight: 600 }}>
+            {daily.focus}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Section 2: Best Time ─────────────────────────────────────────────────────
+function BestTimeSection({ daily }) {
+  const [mins, setMins] = useState(() => minsUntilWindow(daily?.golden_window))
+  useEffect(() => {
+    const t = setInterval(() => setMins(minsUntilWindow(daily?.golden_window)), 60000)
+    return () => clearInterval(t)
+  }, [daily?.golden_window])
+
+  const why = daily?.nakshatra
+    ? `${daily.nakshatra} nakshatra ${daily.tithi_label ? `during ${daily.tithi_label}` : 'sharpens clarity'}`
+    : 'Planetary alignment favours this window'
+
+  return (
+    <div style={{ background:'var(--yellow)', color:'#000', borderRadius:16, padding:'18px 20px', marginBottom:14 }}>
+      <p style={{ fontSize:11, textTransform:'uppercase', letterSpacing:'0.08em', fontWeight:600, opacity:0.6, marginBottom:4 }}>
+        Best Time Today
+      </p>
+      <p style={{ fontSize:26, fontWeight:800, marginBottom:6 }}>{daily?.golden_window}</p>
+      <p style={{ fontSize:12, opacity:0.7, lineHeight:1.4 }}>{why}</p>
+      {mins && (
+        <p style={{ fontSize:12, marginTop:6, fontWeight:600 }}>⏰ Starts in {mins < 60 ? `${mins}m` : `${Math.floor(mins/60)}h ${mins%60}m`}</p>
+      )}
+    </div>
+  )
+}
+
+// ─── Section 3: Signal Cards (horizontal, always visible) ─────────────────────
+function SignalCards({ daily }) {
+  const cards = [
+    daily?.signal    || { icon:'🟡', label:'Signal',  text:'Loading…' },
+    daily?.avoid_card || { icon:'🔴', label:'Avoid',   text:'Loading…' },
+    daily?.watch_card || { icon:'🟡', label:'Watch',   text:'Loading…' }
+  ]
+  return (
+    <div style={{ display:'flex', gap:8, marginBottom:16, overflowX:'auto', paddingBottom:2 }}>
+      {cards.map((c, i) => (
+        <div key={i} style={{
+          flex:'0 0 auto', width:140, background:'var(--gray-2)', borderRadius:12, padding:'12px 12px'
+        }}>
+          <p style={{ fontSize:16, marginBottom:4 }}>{c.icon}</p>
+          <p style={{ fontSize:12, fontWeight:700, marginBottom:4, color:'#ddd' }}>{c.label}</p>
+          <p style={{ fontSize:11, color:'var(--gray-4)', lineHeight:1.4 }}>{c.text}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Section 4: Personal Dashboard ───────────────────────────────────────────
+function RecommendationCard({ rec }) {
+  const [open, setOpen] = useState(false)
+  const confColor = { High:'var(--green-txt)', Medium:'var(--amber-txt)', Low:'var(--red-txt)' }[rec.confidence] || 'var(--gray-4)'
+  return (
+    <div onClick={() => setOpen(o => !o)} style={{
+      background:'var(--gray-2)', borderRadius:12, padding:'12px 14px', cursor:'pointer', marginBottom:6
+    }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ fontSize:18 }}>{rec.icon}</span>
+          <span style={{ fontSize:13, fontWeight:600 }}>{rec.label}</span>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <Stars count={rec.stars || 3} size={12} />
+          <span style={{ fontSize:10, color:confColor, fontWeight:600 }}>{rec.confidence}</span>
+          <span style={{ fontSize:11, color:'var(--gray-4)' }}>{open ? '▴' : '▾'}</span>
+        </div>
+      </div>
+      {open && (
+        <div className="fade-in" style={{ marginTop:10 }}>
+          <p style={{ fontSize:13, color:'var(--white)', marginBottom:4, fontWeight:600 }}>{rec.action}</p>
+          <p style={{ fontSize:12, color:'var(--gray-4)', marginBottom:4, lineHeight:1.5 }}>{rec.reason}</p>
+          {rec.best_time && (
+            <p style={{ fontSize:11, color:'var(--yellow)' }}>Best time: {rec.best_time}</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PersonalDashboard({ primaryMember }) {
+  const [showAll, setShowAll] = useState(false)
+  const recs = primaryMember?.recommendations
+  if (!recs) return null
+  const top  = recs.top || []
+  const rest = recs.rest || []
+  return (
+    <div style={{ marginBottom:20 }}>
+      <p style={{ fontSize:12, color:'var(--gray-4)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>
+        Today's Guidance
+      </p>
+      {top.map((r, i) => <RecommendationCard key={i} rec={r} />)}
+      {rest.length > 0 && (
+        <>
+          {showAll && rest.map((r, i) => <RecommendationCard key={i} rec={r} />)}
+          <button onClick={() => setShowAll(v => !v)} style={{
+            width:'100%', background:'none', border:'1px solid var(--gray-3)', borderRadius:10,
+            color:'var(--gray-4)', fontSize:12, padding:'8px', cursor:'pointer', fontFamily:'inherit', marginTop:4
+          }}>{showAll ? '▴ Show less' : `▾ ${rest.length} more areas`}</button>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── Section 5: Family Today ──────────────────────────────────────────────────
+function FamilyMemberCard({ member, isFirst }) {
+  const [open, setOpen] = useState(false)
+  const emoji = isFirst ? '🙂' : ['👩','👦','👧','👴','👵'][Math.abs(member.name?.charCodeAt(0) || 0) % 5]
+  return (
+    <div onClick={() => setOpen(o => !o)} style={{
+      background:'var(--gray-2)', borderRadius:12, padding:'12px 14px', cursor:'pointer', marginBottom:6
+    }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ fontSize:20 }}>{emoji}</span>
+          <div>
+            <p style={{ fontSize:13, fontWeight:600 }}>{member.name}</p>
+            <p style={{ fontSize:11, color:'var(--yellow)' }}>{member.golden_window}</p>
+          </div>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <Stars count={member.stars || 3} size={12} />
+          <span style={{ fontSize:11, color:'var(--gray-4)' }}>{open ? '▴' : '▾'}</span>
+        </div>
+      </div>
+      {open && (
+        <div className="fade-in" style={{ marginTop:10 }}>
+          <p style={{ fontSize:12, color:'var(--gray-4)', marginBottom:6, lineHeight:1.4 }}>{member.summary || member.do_advice}</p>
+          {member.focus && <p style={{ fontSize:11, color:'var(--yellow)' }}>Focus: {member.focus}</p>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FamilySection({ members, alignment, onFamilyPlan }) {
+  if (!members || members.length < 2) return null
+  return (
+    <div style={{ marginBottom:20 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+        <p style={{ fontSize:12, color:'var(--gray-4)', textTransform:'uppercase', letterSpacing:'0.06em' }}>Family Today</p>
+        <button onClick={onFamilyPlan} style={{
+          background:'none', border:'1px solid var(--gray-3)', borderRadius:20,
+          color:'var(--yellow)', fontSize:11, padding:'4px 10px', cursor:'pointer', fontFamily:'inherit', fontWeight:600
+        }}>Plan Together</button>
+      </div>
+      {members.map((m, i) => <FamilyMemberCard key={i} member={m} isFirst={i===0} />)}
+      {alignment && (
+        <div style={{ background:'var(--gray-2)', borderRadius:12, padding:'12px 14px', marginTop:8 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+            <p style={{ fontSize:13, fontWeight:600 }}>Family Alignment</p>
+            <Stars count={alignment.stars} size={13} />
+          </div>
+          <p style={{ fontSize:12, color:'var(--gray-4)', marginBottom:6 }}>Harmony: {alignment.harmony_pct}%</p>
+          {alignment.best_shared_window && (
+            <p style={{ fontSize:12, color:'var(--yellow)', fontWeight:600, marginBottom:6 }}>
+              Best shared window: {alignment.best_shared_window}
+            </p>
+          )}
+          <p style={{ fontSize:11, color:'var(--gray-4)' }}>✓ {alignment.recommended?.join(' · ')}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Section 6: Timeline ──────────────────────────────────────────────────────
+function TimelineSection({ timeline }) {
+  if (!timeline?.length) return null
+  const qualityColor = { Excellent:'var(--green-txt)', Good:'var(--yellow)', Moderate:'var(--amber-txt)', 'Low energy':'var(--red-txt)' }
+  return (
+    <div style={{ marginBottom:20 }}>
+      <p style={{ fontSize:12, color:'var(--gray-4)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>
+        Today's Timeline
+      </p>
+      <div style={{ position:'relative', paddingLeft:24 }}>
+        {/* vertical line */}
+        <div style={{ position:'absolute', left:8, top:8, bottom:8, width:2, background:'var(--gray-3)', borderRadius:2 }} />
+        {timeline.map((t, i) => (
+          <div key={i} style={{ position:'relative', marginBottom:16 }}>
+            {/* dot */}
+            <div style={{
+              position:'absolute', left:-20, top:3, width:10, height:10, borderRadius:'50%',
+              background: qualityColor[t.quality] || 'var(--gray-3)',
+              border:'2px solid var(--gray-1)'
+            }} />
+            <p style={{ fontSize:13, fontWeight:700, color:qualityColor[t.quality] || '#ccc' }}>{t.time}</p>
+            <p style={{ fontSize:12, color:'var(--gray-4)', lineHeight:1.4 }}>{t.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Section 7: Week Plan ─────────────────────────────────────────────────────
+function WeekSection({ weekPlan, onFetchFuture }) {
+  if (!weekPlan?.length) return null
+  return (
+    <div style={{ marginBottom:20 }}>
+      <p style={{ fontSize:12, color:'var(--gray-4)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>
+        Next 7 Days
+      </p>
+      <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:4 }}>
+        {weekPlan.map((d, i) => (
+          <div key={i} onClick={() => onFetchFuture?.(d.days_ahead)} style={{
+            flex:'0 0 auto', width:80, background:'var(--gray-2)', borderRadius:12, padding:10,
+            cursor: d.days_ahead > 0 ? 'pointer' : 'default', textAlign:'center'
+          }}>
+            <p style={{ fontSize:11, color:'var(--gray-4)', marginBottom:4 }}>{d.label}</p>
+            <Stars count={d.stars} size={11} />
+            <p style={{ fontSize:10, color:'var(--gray-4)', marginTop:4, lineHeight:1.3 }}>{d.summary}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Astro tag bar ────────────────────────────────────────────────────────────
+function AstroBar({ daily }) {
+  if (!daily) return null
+  const tags = [
+    daily.planet   && { emoji: PLANET_SYMBOL[daily.planet] || '✦', text: daily.planet },
+    daily.lunar_phase && { emoji:'🌙', text: daily.lunar_phase === 'Full' ? 'Full Moon' : daily.lunar_phase },
+    daily.nakshatra && { emoji:'✨', text: daily.nakshatra },
+    daily.tithi    && { emoji:'🌗', text: `Tithi ${daily.tithi}` }
+  ].filter(Boolean)
+
+  const tagLine = [
+    daily.planet   && `${daily.planet} ${({ Sun:'drives decisions', Moon:'heightens focus', Mars:'fuels action', Mercury:'sharpens communication', Jupiter:'expands clarity', Venus:'eases dialogue', Saturn:'demands patience' }[daily.planet] || '')}`,
+    daily.nakshatra && `${daily.nakshatra} adds its energy`,
+    daily.tithi_label && daily.tithi_label
+  ].filter(Boolean).slice(0,2).join('; ')
+
+  return (
+    <div style={{ marginBottom:14 }}>
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:tagLine ? 6 : 0 }}>
+        {tags.map((t, i) => (
+          <span key={i} style={{ background:'var(--gray-2)', border:'1px solid var(--gray-3)', borderRadius:20,
+            padding:'4px 10px', fontSize:12, color:'#bbb', display:'inline-flex', alignItems:'center', gap:4 }}>
             {t.emoji} {t.text}
           </span>
         ))}
       </div>
-      {tagLine && <p style={{ fontSize: 12, color: 'var(--gray-4)', lineHeight: 1.5 }}>{tagLine}</p>}
+      {tagLine && <p style={{ fontSize:11, color:'var(--gray-4)' }}>{tagLine}.</p>}
     </div>
   )
 }
 
-function WindowTrigger({ goldenWindow }) {
-  const [mins, setMins] = useState(() => minsUntilWindow(goldenWindow))
-  useEffect(() => { const t = setInterval(() => setMins(minsUntilWindow(goldenWindow)), 60000); return () => clearInterval(t) }, [goldenWindow])
-  if (!mins) return null
-  const h = Math.floor(mins / 60), rem = mins % 60
-  const label = h > 0 ? `${h}h ${rem}m` : `${mins} min${mins !== 1 ? 's' : ''}`
-  return (
-    <div style={{ background: 'var(--gray-2)', borderRadius: 12, padding: '9px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span>⏰</span>
-      <p style={{ fontSize: 13, color: 'var(--white)' }}>Next best window in <span style={{ color: 'var(--yellow)', fontWeight: 700 }}>{label}</span></p>
-    </div>
-  )
-}
-
-function Collapsible({ label, emoji, children }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div style={{ marginTop: 10 }}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        width: '100%', background: 'none', border: 'none', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', padding: '8px 0', cursor: 'pointer', color: 'var(--gray-4)', fontFamily: 'inherit'
-      }}>
-        <span style={{ fontSize: 13 }}>{emoji} {label}</span>
-        <span style={{ fontSize: 12, transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
-      </button>
-      {open && <div className="fade-in">{children}</div>}
-    </div>
-  )
-}
-
-function MemberRow({ member, primaryWindow }) {
-  const [expanded, setExpanded] = useState(false)
-  const aligns = member.golden_window === primaryWindow
-  return (
-    <div style={{ background: 'var(--gray-2)', borderRadius: 12, padding: 12, marginBottom: 6 }}>
-      <div onClick={() => setExpanded(e => !e)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-        <p style={{ fontSize: 13, fontWeight: 600 }}>{member.name}</p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <p style={{ fontSize: 12, color: 'var(--yellow)', fontWeight: 600 }}>{member.golden_window}</p>
-          <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>▾</span>
-        </div>
-      </div>
-      {expanded && (
-        <div className="fade-in" style={{ marginTop: 8 }}>
-          <p style={{ fontSize: 12, color: aligns ? 'var(--green-txt)' : 'var(--amber-txt)', marginBottom: 4 }}>
-            {aligns ? '✓ Timing aligns with yours' : 'Different peak window'}
-          </p>
-          <p style={{ fontSize: 13, color: 'var(--gray-4)' }}>{member.summary}</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function DecisionTimeline({ history }) {
-  const recent = (history || []).slice(0, 5)
-  if (!recent.length) return null
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-      {recent.map(e => (
-        <div key={e.id} style={{ background: 'var(--gray-2)', borderRadius: 10, padding: '9px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 11, color: 'var(--gray-4)', minWidth: 38 }}>{DEC_LABEL[e.decision] || e.decision}</span>
-          <p style={{ fontSize: 13, color: 'var(--white)', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{e.question}</p>
-          {e.outcome && <span style={{ fontSize: 14, flexShrink: 0 }}>{OUTCOME_ICON[e.outcome]}</span>}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function PremiumSection() {
-  const items = [
-    { icon: '📊', label: 'Weekly Analysis',     sub: 'Your patterns across 7 days' },
-    { icon: '🌀', label: 'Life Phase Deep Dive', sub: 'Long-cycle Dasha mapping' },
-    { icon: '🧠', label: 'Advanced Insights',    sub: 'AI-powered decision coaching' }
-  ]
-  return (
-    <div style={{ marginTop: 4 }}>
-      {items.map(item => (
-        <div key={item.label} style={{ background: 'var(--gray-2)', borderRadius: 12, padding: '11px 14px',
-          display: 'flex', alignItems: 'center', gap: 12, opacity: 0.55, marginBottom: 6 }}>
-          <span style={{ fontSize: 18 }}>{item.icon}</span>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 13, fontWeight: 600 }}>{item.label}</p>
-            <p style={{ fontSize: 12, color: 'var(--gray-4)' }}>{item.sub}</p>
-          </div>
-          <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>Unlock →</span>
-        </div>
-      ))}
-      <p style={{ fontSize: 11, color: 'var(--gray-4)', textAlign: 'center', marginTop: 8 }}>
-        Kairos helps improve decision timing through daily guidance
-      </p>
-    </div>
-  )
-}
-
-
-function DebugPanel({ daily }) {
-  if (!daily?.members?.[0]?._debug) return null
-  const d = daily.members[0]._debug
-  return (
-    <div style={{ marginTop: 4 }}>
-      <div style={{ background: 'var(--gray-2)', borderRadius: 12, padding: 14, marginBottom: 8 }}>
-        <p style={{ fontSize: 12, color: 'var(--gray-4)', marginBottom: 6 }}>
-          Window: <span style={{color:'#ccc'}}>{d.golden_window}</span> (score: {d.score?.toFixed?.(2)})
-        </p>
-        {d.dims && (
-          <p style={{ fontSize: 11, color: 'var(--gray-4)', marginBottom: 6 }}>
-            D:{d.dims.d?.toFixed?.(2)} C:{d.dims.c?.toFixed?.(2)} R:{d.dims.r?.toFixed?.(2)} F:{d.dims.f?.toFixed?.(2)}
-          </p>
-        )}
-        {d.lagna && <p style={{ fontSize: 11, color: '#facc15', marginBottom: 4 }}>Lagna: {d.lagna.name}</p>}
-        {d.chartSummary && <p style={{ fontSize: 11, color: 'var(--gray-4)', marginBottom: 6, lineHeight: 1.4 }}>{d.chartSummary}</p>}
-        {d.houseBreakdown && Object.entries(d.houseBreakdown).map(([k, v]) => (
-          <p key={k} style={{ fontSize: 10, color: '#888', lineHeight: 1.4 }}>
-            {k}: {v.note}
-          </p>
-        ))}
-        {d.layers && <p style={{ fontSize: 10, color: '#555', marginTop: 6 }}>Layers: {Object.keys(d.layers).join(' · ')}</p>}
-      </div>
-      {daily.certainty_factor && daily.certainty_factor < 1 && (
-        <p style={{ fontSize: 11, color: 'var(--amber-txt)', textAlign: 'center' }}>
-          Future certainty: {Math.round(daily.certainty_factor * 100)}%
-        </p>
-      )}
-    </div>
-  )
-}
-
+// ─── Install banner ───────────────────────────────────────────────────────────
 function InstallBanner({ onDismiss }) {
   function handleInstall() {
-    if (window.__installPrompt) {
-      window.__installPrompt.prompt()
-      window.__installPrompt.userChoice.then(() => { window.__installPrompt = null; onDismiss() })
-    } else {
-      onDismiss()
-    }
+    window.__installPrompt?.prompt()
+    window.__installPrompt?.userChoice?.then(() => { window.__installPrompt = null; onDismiss() })
   }
   return (
-    <div style={{ background: 'var(--gray-2)', borderRadius: 12, padding: '12px 14px', marginBottom: 12,
-      display: 'flex', alignItems: 'center', gap: 12 }}>
-      <div style={{ flex: 1 }}>
-        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Add Kairos to Home Screen</p>
-        <p style={{ fontSize: 12, color: 'var(--gray-4)' }}>For the best daily guidance experience</p>
+    <div style={{ background:'var(--gray-2)', borderRadius:12, padding:'12px 14px', marginBottom:12,
+      display:'flex', alignItems:'center', gap:12 }}>
+      <div style={{ flex:1 }}>
+        <p style={{ fontSize:13, fontWeight:600, marginBottom:2 }}>Add Kairos to Home Screen</p>
+        <p style={{ fontSize:11, color:'var(--gray-4)' }}>Daily guidance in one tap</p>
       </div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button onClick={handleInstall} style={{
-          background: 'var(--yellow)', border: 'none', borderRadius: 10, padding: '7px 12px',
-          fontSize: 12, fontWeight: 700, color: '#000', cursor: 'pointer', fontFamily: 'inherit'
-        }}>Install</button>
-        <button onClick={onDismiss} style={{
-          background: 'none', border: 'none', color: 'var(--gray-4)', fontSize: 16,
-          cursor: 'pointer', padding: '0 4px'
-        }}>✕</button>
+      <div style={{ display:'flex', gap:6 }}>
+        <button onClick={handleInstall} style={{ background:'var(--yellow)', border:'none', borderRadius:10,
+          padding:'7px 12px', fontSize:12, fontWeight:700, color:'#000', cursor:'pointer', fontFamily:'inherit' }}>Install</button>
+        <button onClick={onDismiss} style={{ background:'none', border:'none', color:'var(--gray-4)',
+          fontSize:16, cursor:'pointer', padding:'0 4px' }}>✕</button>
       </div>
     </div>
   )
 }
 
-export default function HomeScreen({ daily, loading, primaryUser, userData, onProfileOpen, onInvite }) {
-  const [version, setVersion]       = useState(null)
+// ─── Main ─────────────────────────────────────────────────────────────────────
+export default function HomeScreen({ daily, loading, primaryUser, users, userData, onProfileOpen, onInvite, onInsights, onFamilyPlan, onFetchFuture }) {
+  const [version, setVersion]         = useState(null)
   const [showInstall, setShowInstall] = useState(false)
+
   useEffect(() => {
     fetch('/version.json').then(r => r.json()).then(v => setVersion(v.version)).catch(() => {})
-    const onInstallable = () => setShowInstall(true)
-    window.addEventListener('installable', onInstallable)
-    return () => window.removeEventListener('installable', onInstallable)
+    const h = () => setShowInstall(true)
+    window.addEventListener('installable', h)
+    return () => window.removeEventListener('installable', h)
   }, [])
 
-  const history    = userData?.history || []
-  const analytics  = computeAnalytics(history)
-  const insight    = computeInsight(history)
-  const dominant   = daily?.members?.[0]?._reasoning?.dominant || 'default'
-  const signal     = daily ? signalStrength(daily.confidence_summary) : null
-
   const header = (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Logo /><span style={{ fontSize: 17, fontWeight: 600 }}>Kairos</span>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16, paddingTop:8 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+        <Logo /><span style={{ fontSize:17, fontWeight:700 }}>Kairos</span>
       </div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button onClick={onInvite} className="scale-tap" style={{
-          background: 'none', border: '1px solid var(--gray-3)', borderRadius: 20,
-          color: 'var(--yellow)', fontSize: 12, padding: '5px 10px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600
-        }}>Invite</button>
-        <button onClick={onProfileOpen} className="scale-tap" style={{
-          background: 'var(--gray-2)', border: 'none', borderRadius: 20,
-          color: 'var(--gray-4)', fontSize: 12, padding: '5px 10px', cursor: 'pointer', fontFamily: 'inherit'
-        }}>{primaryUser?.name ? `👤 ${primaryUser.name.split(' ')[0]}` : '+ Me'}</button>
+      <div style={{ display:'flex', gap:6 }}>
+        <button onClick={onInvite} style={{ background:'none', border:'1px solid var(--gray-3)', borderRadius:20,
+          color:'var(--yellow)', fontSize:12, padding:'5px 10px', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>
+          Share
+        </button>
+        <button onClick={onProfileOpen} style={{ background:'var(--gray-2)', border:'none', borderRadius:20,
+          color:'var(--gray-4)', fontSize:12, padding:'5px 10px', cursor:'pointer', fontFamily:'inherit' }}>
+          {primaryUser?.name ? `👤 ${primaryUser.name.split(' ')[0]}` : '+ Me'}
+        </button>
       </div>
     </div>
   )
 
-  if (loading) return <div style={{ padding: 16, paddingTop: 56 }}>{header}<div style={{ display:'flex',justifyContent:'center',marginTop:64 }}><span className="spinner" /></div></div>
-  if (!daily) return null
+  if (loading) {
+    return (
+      <div style={{ padding:'16px 16px 0' }}>
+        {header}
+        <div style={{ display:'flex', justifyContent:'center', alignItems:'center', height:300 }}>
+          <span className="spinner" />
+        </div>
+      </div>
+    )
+  }
 
-  const familyMembers = (daily.members || []).filter((_, i) => i > 0)
+  const primaryMember = daily?.members?.[0] || null
+  const familyMembers = daily?.members || []
 
   return (
-    <div style={{ padding: 16, paddingTop: 56 }}>
+    <div style={{ padding:'16px 16px 0', paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))' }}>
       {header}
+
       {showInstall && <InstallBanner onDismiss={() => setShowInstall(false)} />}
-      <TopSection dominant={dominant} planet={daily.planet} lunarPhase={daily.lunar_phase} nakshatra={daily.nakshatra} tithi={daily.tithi} />
-      <WindowTrigger goldenWindow={daily.golden_window} />
 
-      <div style={{ background: 'var(--yellow)', color: '#000', padding: '18px 20px', borderRadius: 16, marginBottom: 14 }}>
-        <p style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, opacity: 0.6 }}>Best Time Today</p>
-        <p style={{ fontSize: 24, fontWeight: 700, marginTop: 3 }}>{daily.golden_window}</p>
-      </div>
+      <GreetingSection primaryUser={primaryUser} daily={daily} />
+      <AstroBar daily={daily} />
+      <BestTimeSection daily={daily} />
+      <SignalCards daily={daily} />
+      <PersonalDashboard primaryMember={primaryMember} />
+      <FamilySection members={familyMembers} alignment={daily?.family_alignment} onFamilyPlan={onFamilyPlan} />
+      <TimelineSection timeline={primaryMember?.timeline} />
+      <WeekSection weekPlan={daily?.week_plan} onFetchFuture={onFetchFuture} />
 
-      <div className="scale-tap" style={{ background: 'var(--green-bg)', padding: 16, borderRadius: 12, marginBottom: 2 }}>
-        <p style={{ fontSize: 12, color: 'var(--green-txt)', marginBottom: 6 }}>🟢 DO</p>
-        <p style={{ fontSize: 15 }}>{daily.do}</p>
-      </div>
-
-      {signal && <p style={{ fontSize: 12, color: 'var(--gray-4)', marginTop: 10, marginBottom: 2 }}>{signal.icon} {signal.label}</p>}
-
-      <Collapsible label="Avoid" emoji="🔴"><div style={{ background:'var(--red-bg)',padding:14,borderRadius:12 }}><p style={{fontSize:14}}>{daily.avoid}</p></div></Collapsible>
-      <Collapsible label="Watch" emoji="⚠️"><div style={{ background:'var(--amber-bg)',padding:14,borderRadius:12 }}><p style={{fontSize:14}}>{daily.watch}</p></div></Collapsible>
-      {familyMembers.length > 0 && (
-        <Collapsible label="Family" emoji="👥">
-          {familyMembers.map((m, i) => <MemberRow key={i} member={m} primaryWindow={daily.golden_window} />)}
-        </Collapsible>
-      )}
-      <Collapsible label="Insights" emoji="💡">
-        {insight && <div style={{ background:'var(--gray-2)',borderRadius:12,padding:14,marginBottom:8 }}><p style={{fontSize:13,color:'var(--gray-4)',lineHeight:1.5}}>{insight}</p></div>}
-        {analytics.actionRateDisplay && (
-          <div style={{ background:'var(--gray-2)',borderRadius:12,padding:14,marginBottom:8 }}>
-            <p style={{ fontSize:13,color:'var(--gray-4)' }}>You act on Kairos advice <span style={{color:'var(--white)',fontWeight:700}}>{analytics.actionRateDisplay}</span> of the time.</p>
-          </div>
-        )}
-        <DecisionTimeline history={history} />
-      </Collapsible>
-      <Collapsible label="Debug" emoji="🔧"><DebugPanel daily={daily} /></Collapsible>
-      <Collapsible label="Coming Soon" emoji="🔒"><PremiumSection /></Collapsible>
-
-      <div style={{ marginTop: 24, paddingBottom: 8, textAlign: 'center' }}>
-        {version && <p style={{ fontSize: 11, color: 'var(--gray-3)' }}>Kairos v{version}</p>}
+      <div style={{ textAlign:'center', paddingBottom:8, borderTop:'1px solid var(--gray-3)', paddingTop:16 }}>
+        <button onClick={onInsights} style={{ background:'none', border:'none', color:'var(--gray-4)',
+          fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>
+          View Insights →
+        </button>
+        {version && <p style={{ fontSize:10, color:'var(--gray-3)', marginTop:4 }}>Kairos v{version}</p>}
       </div>
     </div>
   )
