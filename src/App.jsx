@@ -1,3 +1,11 @@
+/**
+ * App.jsx v28.0
+ *
+ * Single responsibility: data orchestration.
+ * All engine outputs pass through the adapter layer before reaching UI.
+ * No raw engine objects or snake_case properties reach React components.
+ */
+
 import { useState, useEffect, useMemo } from 'react'
 import HomeScreen    from './components/HomeScreen'
 import PlannerScreen from './components/PlannerScreen'
@@ -6,10 +14,19 @@ import InviteModal   from './components/InviteModal'
 import InsightsModal from './components/InsightsModal'
 import BottomNav     from './components/BottomNav'
 import { getUserData, saveProfile, trackOpen, trackFeedback, computeAnalytics } from './lib/dataClient'
-import { buildDailyPackages }            from '../lib/recommendations/index.js'
-import { rankRecommendations }           from '../lib/recommendations/recommendationRanker.js'
-import { validateAndLog }                from '../lib/recommendations/recommendationValidator.js'
-import { buildWeeklyPlan, buildUpcomingOpportunities } from '../lib/recommendations/weeklyPlanner.js'
+import { buildDailyPackages }                                from '../lib/recommendations/index.js'
+import { rankRecommendations }                               from '../lib/recommendations/recommendationRanker.js'
+import { buildWeeklyPlan, buildUpcomingOpportunities }      from '../lib/recommendations/weeklyPlanner.js'
+import { buildMorningBrief }                                 from '../lib/dailyBrief/index.js'
+// ─── Adapter layer: raw engine → validated DTOs ───────────────────────────────
+import {
+  adaptRecommendations,
+  adaptDailyBrief,
+  adaptTimeline,
+  adaptWeeklyPlan,
+  adaptOpportunities,
+  buildDiagnostics
+} from '../lib/adapters/index.js'
 
 export default function App() {
   const [daily, setDaily]               = useState(null)
@@ -40,10 +57,12 @@ export default function App() {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ users: users || [], feedbackAdj, daysAhead })
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) throw new Error(`/api/daily returned ${res.status}`)
       setDaily(await res.json())
-    } catch { setDaily(null) }
-    finally { setLoading(false) }
+    } catch (err) {
+      console.error('[App] fetchDaily failed:', err.message)
+      setDaily(null)
+    } finally { setLoading(false) }
   }
 
   async function handleSaveUsers(updatedUsers) {
@@ -64,18 +83,55 @@ export default function App() {
     })
   }
 
-  // All package-building stays in App — HomeScreen receives clean, ranked data
+  // ─── All transformations happen here, BEFORE reaching any component ──────────
+
+  // 1. Raw recommendation packages → adapted + validated DTOs
   const recommendationPackages = useMemo(() => {
     if (!daily) return []
     const primary = daily.members?.[0]
     if (!primary) return []
     const raw    = buildDailyPackages(primary, null, daily.family_alignment)
-    const valid  = validateAndLog(raw)
-    return rankRecommendations(valid, userPrefs)
+    const ranked = rankRecommendations(raw, userPrefs)
+    return adaptRecommendations(ranked)   // ← adapter normalises all fields
   }, [daily, userPrefs])
 
-  const weeklyPlan    = useMemo(() => buildWeeklyPlan(daily?.week_plan),             [daily])
-  const opportunities = useMemo(() => buildUpcomingOpportunities(daily?.week_plan),  [daily])
+  // 2. Timeline → adapted DTOs
+  const timeline = useMemo(() => {
+    const rawTimeline = daily?.members?.[0]?.timeline
+    return adaptTimeline(rawTimeline)     // ← adapter ensures startTime, description, etc.
+  }, [daily])
+
+  // 3. Daily brief → adapted DTO
+  const brief = useMemo(() => {
+    if (!daily) return null
+    const rawBrief = buildMorningBrief(daily, daily.members?.[0] || null)
+    return adaptDailyBrief(rawBrief, daily)   // ← adapter merges, normalises, validates
+  }, [daily])
+
+  // 4. Weekly plan → adapted DTO
+  const weeklyPlan = useMemo(() => {
+    const raw = buildWeeklyPlan(daily?.week_plan)
+    return adaptWeeklyPlan(raw)           // ← adapter ensures daysAhead, confidenceLabel, etc.
+  }, [daily])
+
+  // 5. Upcoming opportunities → adapted DTOs
+  const opportunities = useMemo(() => {
+    const raw = buildUpcomingOpportunities(daily?.week_plan)
+    return adaptOpportunities(raw)        // ← adapter normalises all fields
+  }, [daily])
+
+  // 6. Dev diagnostics (never in production)
+  const diagnostics = useMemo(() => {
+    if (!import.meta.env.DEV) return null
+    return buildDiagnostics({
+      brief,
+      recommendations: recommendationPackages,
+      weeklyPlan,
+      opportunities,
+      timeline,
+      familyBrief: brief?.familyBrief
+    })
+  }, [brief, recommendationPackages, weeklyPlan, opportunities, timeline])
 
   const users       = userData?.user_profile || []
   const primaryUser = users[0] || null
@@ -85,30 +141,36 @@ export default function App() {
     setTab(t)
     if (t === 'planner') setPlannerOpen(true)
     if (t === 'journal') setInsightsOpen(true)
-    if (t === 'family')  setPlannerOpen(true)   // Family uses Planner modal for now
-    if (t === 'today')   setPlannerOpen(false)
+    if (t === 'family')  setPlannerOpen(true)
+    if (t === 'today')   { setPlannerOpen(false); setInsightsOpen(false) }
   }
 
   return (
     <div style={{ maxWidth:448, margin:'0 auto', minHeight:'100dvh', position:'relative', paddingBottom:76 }}>
       <HomeScreen
+        // All props are validated DTOs — no raw engine objects
+        brief={brief}
+        recommendationPackages={recommendationPackages}
+        timeline={timeline}
+        weeklyPlan={weeklyPlan}
+        opportunities={opportunities}
+        diagnostics={diagnostics}
+        // Meta
         daily={daily}
         loading={loading}
         primaryUser={primaryUser}
         userData={userData}
+        // Callbacks
         onProfileOpen={() => setProfileOpen(true)}
         onInvite={() => setInviteOpen(true)}
         onFamilyPlan={() => { setPlannerOpen(true); setTab('family') }}
         onFetchFuture={(days) => fetchDaily(users, feedbackAdj, days)}
         onFeedback={handleFeedback}
-        recommendationPackages={recommendationPackages}
-        weeklyPlan={weeklyPlan}
-        opportunities={opportunities}
       />
 
       <BottomNav
         active={tab}
-        onToday={() => { setTab('today'); setPlannerOpen(false); setInsightsOpen(false) }}
+        onToday={() => handleTabChange('today')}
         onPlanner={() => handleTabChange('planner')}
         onFamily={() => handleTabChange('family')}
         onJournal={() => handleTabChange('journal')}
