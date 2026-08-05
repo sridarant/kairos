@@ -2,42 +2,56 @@ import { computeAnalytics, computeInsight } from '../lib/dataClient'
 
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
 
-function StatCard({ label, value, sub }) {
+function StatCard({ label, value, sub, accent }) {
   return (
     <div style={{ background:'var(--gray-2)', borderRadius:12, padding:'12px 14px', marginBottom:8 }}>
       <p style={{ fontSize:11, color:'var(--gray-4)', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>{label}</p>
-      <p style={{ fontSize:20, fontWeight:700, color:'var(--white)', marginBottom:2 }}>{value}</p>
+      <p style={{ fontSize:20, fontWeight:700, color: accent || 'var(--white)', marginBottom:2 }}>{value}</p>
       {sub && <p style={{ fontSize:12, color:'var(--gray-4)' }}>{sub}</p>}
     </div>
   )
 }
 
+function JournalEntry({ entry }) {
+  const date = entry.timestamp ? new Date(entry.timestamp).toLocaleDateString('en-GB', { day:'numeric', month:'short' }) : ''
+  const confColor = { do:'var(--green-txt)', avoid:'var(--red-txt)', wait:'var(--amber-txt)' }[entry.decision] || 'var(--gray-4)'
+  return (
+    <div style={{ background:'var(--gray-2)', borderRadius:10, padding:'10px 12px', marginBottom:6 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:3 }}>
+        <span style={{ fontSize:11, color:confColor, fontWeight:700, textTransform:'uppercase' }}>{entry.decision}</span>
+        <span style={{ fontSize:11, color:'var(--gray-4)' }}>{date}</span>
+      </div>
+      <p style={{ fontSize:13, color:'var(--white)', lineHeight:1.4, marginBottom: entry.outcome ? 4 : 0 }}>
+        {entry.question || 'Daily guidance'}
+      </p>
+      {entry.outcome && (
+        <p style={{ fontSize:11, color: entry.outcome === 'success' ? 'var(--green-txt)' : 'var(--red-txt)' }}>
+          {entry.outcome === 'success' ? '✓ Helpful' : '✗ Not helpful'}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function InsightsModal({ onClose, userData }) {
-  const history  = userData?.history || []
+  const history   = userData?.history || []
   const analytics = computeAnalytics(history)
   const insight   = computeInsight(history)
+  const rated     = history.filter(e => e.outcome !== null)
+  const recentJournal = history.slice(0, 7)
 
-  const rated    = history.filter(e => e.outcome !== null)
-  const acted    = history.filter(e => e.acted === true)
-  const doCount  = history.filter(e => e.decision === 'do').length
-  const waitCount = history.filter(e => e.decision === 'wait').length
-
-  // Best window: count golden hour mentions in history
-  const hourCounts = {}
-  history.filter(e => e.timestamp).forEach(e => {
-    const h = new Date(e.timestamp).getHours()
-    const slot = h < 9 ? '07–09' : h < 11 ? '09–11' : h < 13 ? '11–13' : h < 15 ? '13–15' : h < 17 ? '15–17' : '17–19'
-    hourCounts[slot] = (hourCounts[slot] || 0) + 1
-  })
-  const bestWindow = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])[0]?.[0]
-
-  // Best day
+  // Pattern: best day
   const dayCounts = {}
-  history.filter(e => e.outcome === 'success' && e.timestamp).forEach(e => {
+  rated.filter(e => e.outcome === 'success' && e.timestamp).forEach(e => {
     const d = DAY_NAMES[new Date(e.timestamp).getDay()]
     dayCounts[d] = (dayCounts[d] || 0) + 1
   })
   const bestDay = Object.entries(dayCounts).sort((a,b) => b[1]-a[1])[0]?.[0]
+  const doCount   = history.filter(e => e.decision === 'do').length
+  const waitCount = history.filter(e => e.decision === 'wait').length
+  const successRate = rated.length > 0
+    ? Math.round((rated.filter(e => e.outcome === 'success').length / rated.length) * 100)
+    : null
 
   return (
     <>
@@ -50,14 +64,16 @@ export default function InsightsModal({ onClose, userData }) {
         <div style={{ padding:'24px 16px 100px' }}>
           <div style={{ width:36, height:4, background:'var(--gray-3)', borderRadius:2, margin:'0 auto 20px' }} />
           <h2 style={{ fontSize:18, fontWeight:700, marginBottom:4 }}>Your Insights</h2>
-          <p style={{ fontSize:13, color:'var(--gray-4)', marginBottom:20 }}>Based on {history.length} {history.length === 1 ? 'session' : 'sessions'}</p>
+          <p style={{ fontSize:13, color:'var(--gray-4)', marginBottom:20 }}>
+            Based on {history.length} session{history.length !== 1 ? 's' : ''}
+          </p>
 
           {history.length === 0 ? (
-            <div style={{ textAlign:'center', paddingTop:40 }}>
+            <div style={{ textAlign:'center', paddingTop:32 }}>
               <p style={{ fontSize:32, marginBottom:12 }}>📊</p>
               <p style={{ fontSize:15, fontWeight:600, marginBottom:8 }}>No data yet</p>
               <p style={{ fontSize:13, color:'var(--gray-4)', lineHeight:1.6 }}>
-                Start asking Kairos questions and rating guidance to see your insights.
+                Use Kairos daily and rate guidance to see your personalised insights.
               </p>
             </div>
           ) : (
@@ -67,20 +83,31 @@ export default function InsightsModal({ onClose, userData }) {
                   <p style={{ fontSize:14, color:'var(--yellow)', lineHeight:1.5 }}>💡 {insight}</p>
                 </div>
               )}
-              <StatCard label="Action Rate"
-                value={analytics.actionRateDisplay || 'N/A'}
-                sub="How often you act on guidance" />
-              <StatCard label="Success Rate"
-                value={rated.length > 0 ? `${Math.round((rated.filter(e=>e.outcome==='success').length/rated.length)*100)}%` : 'N/A'}
-                sub={`From ${rated.length} rated decisions`} />
-              {bestWindow && <StatCard label="Most Active Window" value={bestWindow} sub="When you ask most questions" />}
-              {bestDay && <StatCard label="Best Decision Day" value={bestDay} sub="Highest success rate" />}
-              <StatCard label="DO vs WAIT"
-                value={`${doCount} / ${waitCount}`}
-                sub="Times guided to act vs wait" />
-              <StatCard label="Total Sessions"
-                value={userData?.usage_stats?.sessions || history.length}
-                sub="App opens recorded" />
+
+              {/* Stats */}
+              {analytics.actionRateDisplay && (
+                <StatCard label="Action Rate" value={analytics.actionRateDisplay}
+                  sub="How often you act on guidance" accent="var(--yellow)" />
+              )}
+              {successRate !== null && (
+                <StatCard label="Helpful Rate" value={`${successRate}%`}
+                  sub={`From ${rated.length} rated decisions`}
+                  accent={successRate >= 70 ? 'var(--green-txt)' : successRate >= 45 ? 'var(--amber-txt)' : 'var(--red-txt)'} />
+              )}
+              {bestDay && (
+                <StatCard label="Your Best Day" value={bestDay} sub="Highest success rate" />
+              )}
+              <StatCard label="DO vs WAIT" value={`${doCount} vs ${waitCount}`} sub="Times guided to act vs wait" />
+
+              {/* Decision journal */}
+              {recentJournal.length > 0 && (
+                <>
+                  <p style={{ fontSize:12, color:'var(--gray-4)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10, marginTop:20 }}>
+                    Recent Decisions
+                  </p>
+                  {recentJournal.map((e, i) => <JournalEntry key={i} entry={e} />)}
+                </>
+              )}
             </>
           )}
         </div>

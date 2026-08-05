@@ -1,4 +1,4 @@
-const CACHE   = 'kairos-v23'
+const CACHE   = 'kairos-v24'
 const OFFLINE  = '/offline.html'
 const SHELL    = ['/', '/index.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png']
 
