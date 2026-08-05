@@ -62,3 +62,15 @@ html, body, #root {
 @media (display-mode: standalone) {
   html, body, #root { height: 100dvh; }
 }
+
+/* Accessibility: respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .fade-in, .slide-up { animation: none; opacity: 1; transform: none; }
+  .scale-tap:active   { transform: none; }
+  .spinner            { animation: spin 1.5s linear infinite; }
+}
