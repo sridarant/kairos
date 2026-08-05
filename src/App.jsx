@@ -102,6 +102,8 @@ export default function App() {
         onFetchFuture={(days) => fetchDaily(users, feedbackAdj, days)}
         onFeedback={handleFeedback}
         recommendationPackages={recommendationPackages}
+        weeklyPlan={weeklyPlan}
+        opportunities={opportunities}
       />
 
       <BottomNav
