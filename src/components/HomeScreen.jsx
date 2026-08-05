@@ -73,8 +73,8 @@ function MorningBrief({ daily, primaryUser }) {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
   const name     = primaryUser?.name?.split(' ')[0] || null
   const conf     = daily?.confidence_summary || 'Medium'
-  const theme    = daily?.focus || 'Today's Theme'
-  const summary  = daily?.why  || 'Planetary alignment shapes today's energy.'
+  const theme    = daily?.focus || "Today's Theme"
+  const summary  = daily?.why  || "Planetary alignment shapes today’s energy."
   const dayStars = daily?.members?.[0]?.stars || daily?.stars || 3
 
   // Outlook label from stars
