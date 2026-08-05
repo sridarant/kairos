@@ -1,58 +1,59 @@
-const CACHE   = 'kairos-v24'
-const OFFLINE  = '/offline.html'
-const SHELL    = ['/', '/index.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png']
+// Kairos Service Worker v26
+// Uses Workbox precaching via vite-plugin-pwa injectManifest strategy.
+// __WB_MANIFEST is replaced at build time with the asset precache list.
 
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())
-  )
-})
+import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL } from 'workbox-precaching'
+import { registerRoute, NavigationRoute }                                    from 'workbox-routing'
+import { NetworkFirst, CacheFirst, NetworkOnly }                             from 'workbox-strategies'
+import { CacheableResponsePlugin }                                           from 'workbox-cacheable-response'
+import { ExpirationPlugin }                                                  from 'workbox-expiration'
 
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  )
-})
+// ─── Precache app shell (injected by vite-plugin-pwa at build time) ───────────
+precacheAndRoute(self.__WB_MANIFEST || [])
+cleanupOutdatedCaches()
 
-self.addEventListener('fetch', e => {
-  const { request } = e
-  const url = new URL(request.url)
+// ─── SPA navigation fallback — always serve index.html ───────────────────────
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL('/index.html'), {
+    // Exclude API routes from the SPA fallback
+    denylist: [/^\/api\//]
+  })
+)
 
-  // Never intercept API calls — always go to network
-  if (url.pathname.startsWith('/api/')) return
+// ─── API routes — NEVER cache; always go to network ──────────────────────────
+// Supabase, Anthropic, and /api/* must never be intercepted.
+registerRoute(
+  ({ url }) => url.pathname.startsWith('/api/') ||
+               url.hostname.includes('supabase') ||
+               url.hostname.includes('anthropic'),
+  new NetworkOnly()
+)
 
-  // Navigation requests: network-first, fallback to cache, then offline page
-  if (request.mode === 'navigate') {
-    e.respondWith(
-      fetch(request)
-        .then(res => {
-          const clone = res.clone()
-          caches.open(CACHE).then(c => c.put(request, clone))
-          return res
-        })
-        .catch(() => caches.match(request).then(cached => cached || caches.match('/index.html')))
-    )
-    return
-  }
+// ─── Static assets — cache-first with 30-day expiry ──────────────────────────
+registerRoute(
+  ({ request }) => ['style', 'script', 'worker'].includes(request.destination),
+  new CacheFirst({
+    cacheName: 'kairos-assets-v26',
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 30 * 24 * 60 * 60 })
+    ]
+  })
+)
 
-  // Static assets: cache-first
-  e.respondWith(
-    caches.match(request).then(cached => {
-      if (cached) return cached
-      return fetch(request).then(res => {
-        if (res.ok && res.type !== 'opaque') {
-          const clone = res.clone()
-          caches.open(CACHE).then(c => c.put(request, clone))
-        }
-        return res
-      }).catch(() => new Response('Offline', { status: 503 }))
-    })
-  )
-})
+// ─── Images — cache-first with 7-day expiry ───────────────────────────────────
+registerRoute(
+  ({ request }) => request.destination === 'image',
+  new CacheFirst({
+    cacheName: 'kairos-images-v26',
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 7 * 24 * 60 * 60 })
+    ]
+  })
+)
 
-// Listen for skip-waiting message from app
+// ─── Skip-waiting message ─────────────────────────────────────────────────────
 self.addEventListener('message', e => {
   if (e.data?.type === 'SKIP_WAITING') self.skipWaiting()
 })

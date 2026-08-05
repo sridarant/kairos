@@ -6,19 +6,21 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // Use the hand-written public/sw.js — do not auto-generate one
+      // Use our hand-written sw.js — plugin injects __WB_MANIFEST into it at build time
       strategies: 'injectManifest',
       srcDir: 'public',
       filename: 'sw.js',
-      // Do not let the plugin generate manifest.json — we have our own
+      // We manage manifest.json ourselves — do not generate one
       manifest: false,
       injectManifest: {
-        // Precache the app shell assets produced by the build
+        // Source for the manifest injection
+        swSrc: 'public/sw.js',
+        swDest: 'dist/sw.js',
+        // Match the build output files to precache
         globDirectory: 'dist',
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
-        // Inject the precache manifest into the sw.js __WB_MANIFEST placeholder.
-        // If the placeholder is absent the plugin skips injection gracefully.
-        injectionPoint: '__WB_MANIFEST'
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest,woff,woff2}'],
+        // Injection point — replaced with the precache manifest array
+        injectionPoint: 'self.__WB_MANIFEST'
       }
     })
   ]
