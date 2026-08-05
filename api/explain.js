@@ -49,11 +49,65 @@ function buildFallback(decisionObj) {
 }
 
 // ─── Build the prompt sent to Claude ─────────────────────────────────────────
+
+/**
+ * buildPromptFromMeta: uses structured reasoning metadata from the reasoning engine.
+ * Richer and more traceable than the fallback prompt.
+ */
+function buildPromptFromMeta(question, decisionObj, meta) {
+  const { decision, confidence, goldenWindow, avoidWindow } = decisionObj
+  return `You are the language layer of Kairos, a Vedic astrology decision companion.
+
+The reasoning engine has already determined the following structured output.
+Your ONLY job is to write 1–2 natural sentences. Do NOT change any values.
+
+USER QUESTION: "${question}"
+
+ENGINE OUTPUT (fixed — do not alter):
+- Decision: ${decision}
+- Confidence: ${confidence}
+- Best window: ${goldenWindow}
+- Avoid after: ${avoidWindow || 'none'}
+
+REASONING CHAIN:
+${(meta.decisionRationale || []).join('\n')}
+
+KEY FACTORS:
+- Primary driver: ${meta.dominantFactor}
+- Supporting: ${(meta.supportingFactors || []).join('; ') || 'none'}
+- Conflict: ${(meta.conflictingFactors || []).join('; ') || 'none'}
+- ${meta.conflictNote || 'No significant conflict today.'}
+
+CONTEXT:
+- Dasha: ${meta.dashaContext}
+- Nakshatra: ${meta.nakshatraContext || 'not available'}
+- Tithi: ${meta.tithiContext || 'not available'}
+
+INSTRUCTIONS:
+1. Write exactly 1–2 sentences.
+2. Reference the nakshatra, dasha, or dominant factor naturally.
+3. If decision is DO: affirm the action in the context of the question.
+4. If decision is WAIT: suggest the best window (${goldenWindow}).
+5. If decision is AVOID: advise caution clearly but constructively.
+6. If there is a conflict note, weave it in once, briefly.
+7. Never mention percentages, scores, or engine internals.
+8. Tone: calm, trustworthy, direct.
+
+OUTPUT (strict JSON only):
+{ "explanation": "..." }\``
+}
+
 function buildPrompt(question, decisionObj) {
   const {
     decision, confidence, goldenWindow, avoidWindow,
-    _panchang, _dasha, _yogas, _lagna, signals, _nakshatraFx
+    _panchang, _dasha, _yogas, _lagna, signals, _nakshatraFx,
+    explanationMeta
   } = decisionObj
+
+  // Use pre-built explanation metadata from reasoning engine when available
+  if (explanationMeta) {
+    return buildPromptFromMeta(question, decisionObj, explanationMeta)
+  }
 
   // Structured signals summary
   const positives = (signals?.positive || []).slice(0, 3).map(s => s.split(':').slice(1).join(': '))

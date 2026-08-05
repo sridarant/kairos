@@ -140,12 +140,13 @@ export default async function handler(req, res) {
       confidence:    decisionObj.confidence,
       focus:         decisionObj.focus,
       summary:       `${decisionObj.decision} — ${decisionObj.confidence} signal. Use ${decisionObj.goldenWindow} for priority work.`,
-      recommendations: enrichedCategories(decisionObj.categoryScores),
+      recommendations: decisionObj.recommendations || { top: [], rest: [] },
       timeline:      decisionObj.timeline,
       do_advice:     `Use ${decisionObj.goldenWindow} for your most important work.`,
       avoid_advice:  `Avoid new commitments after ${decisionObj.avoidWindow}.`,
       watch_advice:  `Energy shifts around ${decisionObj.watchWindow}.`,
-      _decision:     decisionObj   // full object for /api/explain
+      _decision:     decisionObj,  // full object for /api/explain
+      _explanationMeta: decisionObj.explanationMeta
     }
   })
 
