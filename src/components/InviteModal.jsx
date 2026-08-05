@@ -1,75 +1,30 @@
-import { useState } from 'react'
-
-const INVITE_TEXT = "I'm using Kairos for daily decision timing. Join me — let's align our timing.\nhttps://kairos.app"
+import { PrimaryButton, SecondaryButton, BodyText, Caption } from './common/index.jsx'
+import { Surface, Text, Accent, Radius, Space, Pad, FontSize, FontWeight, Z } from '../styles/tokens/index.js'
 
 export default function InviteModal({ onClose }) {
-  const [copied, setCopied] = useState(false)
-
-  function handleCopy() {
+  async function share() {
     try {
-      navigator.clipboard.writeText(INVITE_TEXT)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {}
+      await navigator.share({ title:'Kairos', text:'Daily Vedic guidance for better decisions.', url: window.location.href })
+    } catch { /* user cancelled or not supported */ }
+    onClose()
   }
-
-  async function handleShare() {
-    if (navigator.share) {
-      await navigator.share({ title: 'Kairos', text: INVITE_TEXT }).catch(() => {})
-    } else {
-      handleCopy()
-    }
+  async function copy() {
+    await navigator.clipboard.writeText(window.location.href).catch(() => {})
+    onClose()
   }
-
   return (
     <>
-      <div onClick={onClose} style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-        backdropFilter: 'blur(4px)', zIndex: 40
-      }} />
+      <div onClick={onClose} style={{ position:'fixed', inset:0, background: Surface.Overlay, backdropFilter:'blur(4px)', zIndex:40 }} />
       <div className="slide-up" style={{
-        position: 'fixed', bottom: 0, left: '50%',
-        transform: 'translateX(-50%)',
-        width: '100%', maxWidth: 448,
-        background: 'var(--gray-1)',
-        borderRadius: '20px 20px 0 0',
-        maxHeight: '90vh',
-        overflowY: 'auto',
-        zIndex: 50
-      }}>
-        <div style={{ padding: "24px 16px 100px" }}>
-          <div style={{ width: 36, height: 4, background: 'var(--gray-3)', borderRadius: 2, margin: '0 auto 20px' }} />
-          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 6 }}>Invite to Kairos</h2>
-          <p style={{ fontSize: 13, color: 'var(--gray-4)', marginBottom: 20 }}>
-            Align timing with family and friends.
-          </p>
-
-          <div style={{ background: 'var(--gray-2)', borderRadius: 12, padding: 14, marginBottom: 16 }}>
-            <p style={{ fontSize: 14, color: 'var(--white)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
-              {INVITE_TEXT}
-            </p>
-          </div>
-
-          <p style={{ fontSize: 12, color: 'var(--gray-4)', marginBottom: 16, textAlign: 'center' }}>
-            Kairos helps improve decision timing through daily guidance
-          </p>
-
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={handleCopy} className="scale-tap" style={{
-              flex: 1, padding: 14, background: 'var(--gray-2)', border: 'none',
-              borderRadius: 12, color: '#fff', fontSize: 15, cursor: 'pointer', fontFamily: 'inherit'
-            }}>
-              {copied ? '✓ Copied' : 'Copy'}
-            </button>
-            <button onClick={handleShare} className="scale-tap" style={{
-              flex: 2, padding: 14, background: 'var(--yellow)', border: 'none',
-              borderRadius: 12, color: '#000', fontSize: 15, fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'inherit'
-            }}>
-              Share Invite
-            </button>
-          </div>
-        </div>
+        position:'fixed', left:0, right:0, bottom:0, maxWidth:448, margin:'0 auto',
+        background: Surface.Base, borderRadius: Radius.modal, zIndex:50, padding: Pad.modal }}>
+        <div style={{ width:36, height:4, background: Surface.Line, borderRadius: Radius.sm, margin:`0 auto ${Space.xl}px` }} />
+        <p style={{ fontSize: FontSize.Heading3, fontWeight: FontWeight.Bold, marginBottom: Space.sm, color: Text.Primary }}>Share Kairos</p>
+        <BodyText muted style={{ marginBottom: Space['3xl'] }}>
+          Help your family make better decisions with daily Vedic guidance.
+        </BodyText>
+        <PrimaryButton onClick={share} fullWidth style={{ marginBottom: Space.sm }}>Share Link</PrimaryButton>
+        <SecondaryButton onClick={copy} style={{ width:'100%' }}>Copy Link</SecondaryButton>
       </div>
     </>
   )

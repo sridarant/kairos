@@ -1,8 +1,12 @@
+/**
+ * ProfileModal — Profile & family member setup. Migrated to Design System.
+ */
 import { useState } from 'react'
+import { PrimaryButton, SecondaryButton, DangerButton, FieldLabel, Caption } from './common/index.jsx'
+import { Surface, Text, Status, Accent, Radius, Space, Pad, Gap, FontSize, FontWeight, Z } from '../styles/tokens/index.js'
 
 const MAX_MEMBERS = 3
 
-// Auto-format DOB: inserts "-" after day and month digits
 function formatDob(raw) {
   const digits = raw.replace(/\D/g, '').slice(0, 8)
   if (digits.length <= 2) return digits
@@ -10,133 +14,81 @@ function formatDob(raw) {
   return digits.slice(0, 2) + '-' + digits.slice(2, 4) + '-' + digits.slice(4)
 }
 
+function inputStyle() {
+  return {
+    width:'100%', background: Surface.Card, border:`1px solid ${Surface.Line}`,
+    borderRadius: Radius.input, padding: Pad.input, fontSize: FontSize.Body,
+    color: Text.Primary, fontFamily:'inherit', outline:'none', boxSizing:'border-box'
+  }
+}
+
 export default function ProfileModal({ onClose, users, onSave }) {
   const [list, setList] = useState(
-    users.length > 0 ? users : [{ name: '', dob: '', birth_time: '', type: '' }]
+    users.length > 0 ? users : [{ name:'', dob:'', birth_time:'', type:'' }]
   )
+  const [saving, setSaving] = useState(false)
 
   function update(i, field, val) {
     setList(prev => prev.map((u, idx) => idx === i ? { ...u, [field]: val } : u))
   }
-
-  function handleDobChange(i, raw) {
-    update(i, 'dob', formatDob(raw))
-  }
-
+  function updateDob(i, val) { update(i, 'dob', formatDob(val)) }
   function addMember() {
-    if (list.length >= MAX_MEMBERS) return
-    setList(prev => [...prev, { name: '', dob: '', birth_time: '', type: '' }])
+    if (list.length < MAX_MEMBERS) setList(p => [...p, { name:'', dob:'', birth_time:'', type:'family' }])
   }
-
-  function removeMember(i) {
-    setList(prev => prev.filter((_, idx) => idx !== i))
-  }
-
-  function handleSave() {
-    const cleaned = list.filter(u => u.name.trim())
-    onSave(cleaned)
+  function remove(i) { setList(p => p.filter((_, idx) => idx !== i)) }
+  async function save() {
+    setSaving(true)
+    await onSave(list.filter(u => u.name?.trim()))
+    setSaving(false)
     onClose()
   }
 
-  const inputStyle = {
-    width: '100%', background: 'var(--gray-3)', border: 'none', borderRadius: 10,
-    color: '#fff', fontSize: 14, padding: '11px 12px', outline: 'none', fontFamily: 'inherit'
-  }
-  const labelStyle = { fontSize: 11, color: 'var(--gray-4)', marginBottom: 5, display: 'block' }
-
   return (
     <>
-      <div onClick={onClose} style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-        backdropFilter: 'blur(4px)', zIndex: 40
-      }} />
-
+      <div onClick={onClose} style={{ position:'fixed', inset:0, background: Surface.Overlay, backdropFilter:'blur(4px)', zIndex: Z.overlay }} />
       <div className="slide-up" style={{
-        position: 'fixed', bottom: 0, left: '50%',
-        transform: 'translateX(-50%)',
-        width: '100%', maxWidth: 448,
-        background: 'var(--gray-1)',
-        borderRadius: '20px 20px 0 0',
-        maxHeight: '90vh',
-        overflowY: 'auto',
-        zIndex: 50
-      }}>
-        {/* inner pad — bottom 80px keeps save button clear of nav */}
-        <div style={{ padding: "24px 16px 100px" }}>
-          <div style={{ width: 36, height: 4, background: 'var(--gray-3)', borderRadius: 2, margin: '0 auto 20px' }} />
-          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>Profiles</h2>
-          <p style={{ fontSize: 13, color: 'var(--gray-4)', marginBottom: 20 }}>Up to {MAX_MEMBERS} members</p>
+        position:'fixed', left:0, right:0, bottom:0, maxWidth:448, margin:'0 auto',
+        maxHeight:'92vh', overflowY:'auto', background: Surface.Base, borderRadius: Radius.modal, zIndex: Z.modal }}>
+        <div style={{ padding: Pad.modal }}>
+          <div style={{ width:36, height:4, background: Surface.Line, borderRadius: Radius.sm, margin:`0 auto ${Space.xl}px` }} />
+          <p style={{ fontSize: FontSize.Heading3, fontWeight: FontWeight.Bold, marginBottom: Space.xs, color: Text.Primary }}>Your Profile</p>
+          <Caption style={{ marginBottom: Space['3xl'] }}>Enter details for personalised recommendations.</Caption>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {list.map((u, i) => (
-              <div key={i} style={{ background: 'var(--gray-2)', borderRadius: 12, padding: 14, position: 'relative' }}>
-                {list.length > 1 && (
-                  <button onClick={() => removeMember(i)} style={{
-                    position: 'absolute', top: 10, right: 10,
-                    background: 'none', border: 'none', color: 'var(--gray-4)',
-                    fontSize: 16, cursor: 'pointer', lineHeight: 1
-                  }}>✕</button>
-                )}
-                <p style={{ fontSize: 12, color: 'var(--yellow)', fontWeight: 600, marginBottom: 12 }}>
-                  {i === 0 ? 'You' : `Member ${i + 1}`}
+          {list.map((user, i) => (
+            <div key={i} style={{ background: Surface.Card, borderRadius: Radius['2xl'], padding: Pad.cardLg, marginBottom: Space.md }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: Space.md }}>
+                <p style={{ fontSize: FontSize.CardTitle, fontWeight: FontWeight.Bold, color: Text.Primary }}>
+                  {i === 0 ? 'You' : `Family Member ${i + 1}`}
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div>
-                    <span style={labelStyle}>Name</span>
-                    <input value={u.name} onChange={e => update(i, 'name', e.target.value)}
-                      placeholder="Your name" style={inputStyle} />
-                  </div>
-                  <div>
-                    <span style={labelStyle}>Date of Birth (optional)</span>
-                    <input
-                      value={u.dob}
-                      onChange={e => handleDobChange(i, e.target.value)}
-                      placeholder="DD-MM-YYYY"
-                      inputMode="numeric"
-                      style={inputStyle}
-                    />
-                  </div>
-                  <div>
-                    <span style={labelStyle}>Birth Time — 24h (optional, for Lagna)</span>
-                    <input
-                      type="time"
-                      value={u.birth_time}
-                      onChange={e => update(i, 'birth_time', e.target.value)}
-                      placeholder="HH:MM (24h)"
-                      style={{ ...inputStyle, colorScheme: 'dark' }}
-                    />
-                  </div>
-                  <div>
-                    <span style={labelStyle}>Type (optional)</span>
-                    <select value={u.type} onChange={e => update(i, 'type', e.target.value)}
-                      style={{ ...inputStyle, appearance: 'none' }}>
-                      <option value="">— select —</option>
-                      <option value="work-focused">Work-focused</option>
-                      <option value="student">Student</option>
-                      <option value="creative">Creative</option>
-                      <option value="entrepreneur">Entrepreneur</option>
-                    </select>
-                  </div>
-                </div>
+                {i > 0 && (
+                  <button onClick={() => remove(i)} style={{ background:'none', border:'none', color: Status.Danger,
+                    cursor:'pointer', fontSize: FontSize.Caption, fontFamily:'inherit' }}>Remove</button>
+                )}
               </div>
-            ))}
-          </div>
+
+              {[
+                { label:'Name', field:'name', placeholder:'Your name', type:'text' },
+                { label:'Date of Birth', field:'dob', placeholder:'DD-MM-YYYY', type:'text' },
+                { label:'Birth Time (optional)', field:'birth_time', placeholder:'HH:MM', type:'text' },
+              ].map(({ label, field, placeholder, type }) => (
+                <div key={field} style={{ marginBottom: Space.md }}>
+                  <FieldLabel text={label} />
+                  <input
+                    type={type} placeholder={placeholder} value={user[field] || ''}
+                    onChange={e => field === 'dob' ? updateDob(i, e.target.value) : update(i, field, e.target.value)}
+                    style={inputStyle()} />
+                </div>
+              ))}
+            </div>
+          ))}
 
           {list.length < MAX_MEMBERS && (
-            <button onClick={addMember} className="scale-tap" style={{
-              width: '100%', marginTop: 12, padding: '11px',
-              background: 'var(--gray-2)', border: '1px dashed var(--gray-3)',
-              borderRadius: 12, color: 'var(--gray-4)', fontSize: 14,
-              cursor: 'pointer', fontFamily: 'inherit'
-            }}>+ Add family member</button>
+            <SecondaryButton onClick={addMember} style={{ width:'100%', marginBottom: Space.md }}>
+              + Add Family Member
+            </SecondaryButton>
           )}
 
-          <button onClick={handleSave} className="scale-tap" style={{
-            width: '100%', marginTop: 14, padding: '14px',
-            background: 'var(--yellow)', border: 'none', borderRadius: 12,
-            color: '#000', fontSize: 16, fontWeight: 600,
-            cursor: 'pointer', fontFamily: 'inherit'
-          }}>Save Profiles</button>
+          <PrimaryButton onClick={save} loading={saving} fullWidth>Save Profile</PrimaryButton>
         </div>
       </div>
     </>

@@ -66,7 +66,7 @@ export default function FamilyPlanModal({ onClose, users, daily }) {
                     display:'flex', flexDirection:'column', alignItems:'center', gap:6
                   }}>
                     <span style={{ fontSize:24 }}>{a.icon}</span>
-                    <span style={{ fontSize:12, color:'#ddd', textAlign:'center', lineHeight:1.3 }}>{a.label}</span>
+                    <span style={{ fontSize:12, color:'var(--gray-4)', textAlign:'center', lineHeight:1.3 }}>{a.label}</span>
                   </button>
                 ))}
               </div>

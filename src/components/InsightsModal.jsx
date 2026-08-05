@@ -1,32 +1,39 @@
+/**
+ * InsightsModal — Journal / History view. Migrated to Design System.
+ */
 import { computeAnalytics, computeInsight } from '../lib/dataClient'
+import { StandardCard, SectionTitle, Caption, FieldLabel, EmptyState } from './common/index.jsx'
+import { Surface, Text, Status, Confidence, Accent, Radius, Space, Pad, Gap, FontSize, FontWeight, Z } from '../styles/tokens/index.js'
 
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
 
-function StatCard({ label, value, sub, accent }) {
+function StatCard({ label, value, sub, color }) {
   return (
-    <div style={{ background:'var(--gray-2)', borderRadius:12, padding:'12px 14px', marginBottom:8 }}>
-      <p style={{ fontSize:11, color:'var(--gray-4)', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>{label}</p>
-      <p style={{ fontSize:20, fontWeight:700, color: accent || 'var(--white)', marginBottom:2 }}>{value}</p>
-      {sub && <p style={{ fontSize:12, color:'var(--gray-4)' }}>{sub}</p>}
-    </div>
+    <StandardCard>
+      <FieldLabel text={label} />
+      <p style={{ fontSize: FontSize.Heading2, fontWeight: FontWeight.Bold, color: color || Text.Primary, marginBottom: Space.xs }}>{value}</p>
+      {sub && <Caption>{sub}</Caption>}
+    </StandardCard>
   )
 }
 
 function JournalEntry({ entry }) {
-  const date = entry.timestamp ? new Date(entry.timestamp).toLocaleDateString('en-GB', { day:'numeric', month:'short' }) : ''
-  const confColor = { do:'var(--green-txt)', avoid:'var(--red-txt)', wait:'var(--amber-txt)' }[entry.decision] || 'var(--gray-4)'
+  const date = entry.timestamp
+    ? new Date(entry.timestamp).toLocaleDateString('en-GB', { day:'numeric', month:'short' })
+    : ''
+  const confColor = { do: Status.Success, avoid: Status.Danger, wait: Status.Warning }[entry.decision] || Text.Secondary
   return (
-    <div style={{ background:'var(--gray-2)', borderRadius:10, padding:'10px 12px', marginBottom:6 }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:3 }}>
-        <span style={{ fontSize:11, color:confColor, fontWeight:700, textTransform:'uppercase' }}>{entry.decision}</span>
-        <span style={{ fontSize:11, color:'var(--gray-4)' }}>{date}</span>
+    <div style={{ background: Surface.Card, borderRadius: Radius.card, padding: Pad.card, marginBottom: Gap.card }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: Space.xs }}>
+        <span style={{ fontSize: FontSize.CardTitle, fontWeight: FontWeight.Bold, color: confColor, textTransform:'uppercase' }}>
+          {entry.decision || 'WAIT'}
+        </span>
+        <Caption>{date}</Caption>
       </div>
-      <p style={{ fontSize:13, color:'var(--white)', lineHeight:1.4, marginBottom: entry.outcome ? 4 : 0 }}>
-        {entry.question || 'Daily guidance'}
-      </p>
+      {entry.focus && <p style={{ fontSize: FontSize.BodySmall, color: Text.Primary, marginBottom: Space.xs }}>{entry.focus}</p>}
       {entry.outcome && (
-        <p style={{ fontSize:11, color: entry.outcome === 'success' ? 'var(--green-txt)' : 'var(--red-txt)' }}>
-          {entry.outcome === 'success' ? '✓ Helpful' : '✗ Not helpful'}
+        <p style={{ fontSize: FontSize.Caption, color: entry.outcome === 'yes' ? Status.Success : Status.Danger }}>
+          {entry.outcome === 'yes' ? '✓ Acted on it' : '✗ Skipped'}
         </p>
       )}
     </div>
@@ -34,82 +41,40 @@ function JournalEntry({ entry }) {
 }
 
 export default function InsightsModal({ onClose, userData }) {
-  const history   = userData?.history || []
-  const analytics = computeAnalytics(history)
-  const insight   = computeInsight(history)
-  const rated     = history.filter(e => e.outcome !== null)
-  const recentJournal = history.slice(0, 7)
-
-  // Pattern: best day
-  const dayCounts = {}
-  rated.filter(e => e.outcome === 'success' && e.timestamp).forEach(e => {
-    const d = DAY_NAMES[new Date(e.timestamp).getDay()]
-    dayCounts[d] = (dayCounts[d] || 0) + 1
-  })
-  const bestDay = Object.entries(dayCounts).sort((a,b) => b[1]-a[1])[0]?.[0]
-  const doCount   = history.filter(e => e.decision === 'do').length
-  const waitCount = history.filter(e => e.decision === 'wait').length
-  const successRate = rated.length > 0
-    ? Math.round((rated.filter(e => e.outcome === 'success').length / rated.length) * 100)
-    : null
+  const stats   = computeAnalytics(userData?.history || [])
+  const insight = computeInsight(userData?.history || [])
+  const history = (userData?.history || []).slice().reverse().slice(0, 14)
 
   return (
     <>
-      <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', backdropFilter:'blur(4px)', zIndex:40 }} />
+      <div onClick={onClose} style={{ position:'fixed', inset:0, background: Surface.Overlay, backdropFilter:'blur(4px)', zIndex: Z.overlay }} />
       <div className="slide-up" style={{
         position:'fixed', left:0, right:0, bottom:0, maxWidth:448, margin:'0 auto',
-        maxHeight:'90vh', overflowY:'auto', background:'var(--gray-1)',
-        borderRadius:'20px 20px 0 0', zIndex:50
-      }}>
-        <div style={{ padding:'24px 16px 100px' }}>
-          <div style={{ width:36, height:4, background:'var(--gray-3)', borderRadius:2, margin:'0 auto 20px' }} />
-          <h2 style={{ fontSize:18, fontWeight:700, marginBottom:4 }}>Your Insights</h2>
-          <p style={{ fontSize:13, color:'var(--gray-4)', marginBottom:20 }}>
-            Based on {history.length} session{history.length !== 1 ? 's' : ''}
-          </p>
+        maxHeight:'92vh', overflowY:'auto', background: Surface.Base, borderRadius: Radius.modal, zIndex: Z.modal }}>
+        <div style={{ padding: Pad.modal }}>
+          <div style={{ width:36, height:4, background: Surface.Line, borderRadius: Radius.sm, margin:`0 auto ${Space.xl}px` }} />
+          <p style={{ fontSize: FontSize.Heading3, fontWeight: FontWeight.Bold, marginBottom: Space.xl, color: Text.Primary }}>Your Insights</p>
 
-          {history.length === 0 ? (
-            <div style={{ textAlign:'center', paddingTop:32 }}>
-              <p style={{ fontSize:32, marginBottom:12 }}>📊</p>
-              <p style={{ fontSize:15, fontWeight:600, marginBottom:8 }}>No data yet</p>
-              <p style={{ fontSize:13, color:'var(--gray-4)', lineHeight:1.6 }}>
-                Use Kairos daily and rate guidance to see your personalised insights.
-              </p>
+          {insight && (
+            <div style={{ background: Surface.Card, borderRadius: Radius.card, padding: Pad.card, marginBottom: Space.xl,
+              display:'flex', gap: Space.md }}>
+              <span style={{ fontSize: FontSize.Heading3 }}>💡</span>
+              <p style={{ fontSize: FontSize.BodySmall, color: Text.Secondary, lineHeight:1.5 }}>{insight}</p>
             </div>
-          ) : (
-            <>
-              {insight && (
-                <div style={{ background:'rgba(250,204,21,0.1)', borderRadius:12, padding:14, marginBottom:16, border:'1px solid rgba(250,204,21,0.2)' }}>
-                  <p style={{ fontSize:14, color:'var(--yellow)', lineHeight:1.5 }}>💡 {insight}</p>
-                </div>
-              )}
-
-              {/* Stats */}
-              {analytics.actionRateDisplay && (
-                <StatCard label="Action Rate" value={analytics.actionRateDisplay}
-                  sub="How often you act on guidance" accent="var(--yellow)" />
-              )}
-              {successRate !== null && (
-                <StatCard label="Helpful Rate" value={`${successRate}%`}
-                  sub={`From ${rated.length} rated decisions`}
-                  accent={successRate >= 70 ? 'var(--green-txt)' : successRate >= 45 ? 'var(--amber-txt)' : 'var(--red-txt)'} />
-              )}
-              {bestDay && (
-                <StatCard label="Your Best Day" value={bestDay} sub="Highest success rate" />
-              )}
-              <StatCard label="DO vs WAIT" value={`${doCount} vs ${waitCount}`} sub="Times guided to act vs wait" />
-
-              {/* Decision journal */}
-              {recentJournal.length > 0 && (
-                <>
-                  <p style={{ fontSize:12, color:'var(--gray-4)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10, marginTop:20 }}>
-                    Recent Decisions
-                  </p>
-                  {recentJournal.map((e, i) => <JournalEntry key={i} entry={e} />)}
-                </>
-              )}
-            </>
           )}
+
+          <SectionTitle>Usage Statistics</SectionTitle>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap: Gap.grid, marginBottom: Space.xl }}>
+            <StatCard label="Days Tracked" value={stats.totalDays || 0} sub="Total sessions" color={Accent} />
+            <StatCard label="Actions Taken" value={`${stats.actionRate || 0}%`} sub="Act rate" color={Status.Success} />
+            <StatCard label="Best Day" value={stats.bestDay || '—'} sub="Historically" />
+            <StatCard label="Best Window" value={stats.bestWindow || '—'} sub="Most productive" color={Accent} />
+          </div>
+
+          {history.length > 0 ? (<>
+            <SectionTitle>Recent History</SectionTitle>
+            {history.map((e, i) => <JournalEntry key={i} entry={e} />)}
+          </>) : <EmptyState icon="📖" title="No history yet" body="Your decisions will appear here after your first session." />}
         </div>
       </div>
     </>

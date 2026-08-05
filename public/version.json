@@ -1,6 +1,7 @@
 {
-  "version": "28.0.0",
+  "version": "29.0.0",
+  "phase": "3",
   "name": "Kairos",
-  "release": "Engineering Excellence & Data Integrity",
+  "release": "UX Realisation & Product Experience",
   "date": "2026-08-05"
 }
