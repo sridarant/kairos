@@ -149,7 +149,7 @@ function MorningBrief({ daily, primaryUser, brief }) {
 
   const outlookColor = outlook === 'Positive' ? C.green : outlook === 'Challenging' ? C.red : C.yellow
   const dayStars     = daily?.members?.[0]?.stars || daily?.stars || 3
-  const summaryText  = brief?.decisionOfDay || daily?.why || null
+  const summaryText  = brief?.decisionOfDay || daily?.members?.[0]?.summary || null
 
   return (
     <section aria-label="Morning Brief" style={{
@@ -308,7 +308,12 @@ function RecommendationCard({ pkg, onFeedback }) {
 
 function TopRecommendations({ packages, onFeedback }) {
   const top = (packages || []).slice(0, 3)
-  if (!top.length) return null
+  if (!top.length) return (
+    <section style={{ marginBottom:4 }}>
+      <SectionTitle>Your Priorities</SectionTitle>
+      <Card><p style={{ fontSize:12, color:C.gray4, textAlign:'center', padding:'8px 0' }}>Loading recommendations…</p></Card>
+    </section>
+  )
   return (
     <section aria-label="Top Recommendations" style={{ marginBottom:4 }}>
       <SectionTitle>Your Priorities</SectionTitle>
@@ -357,7 +362,12 @@ function Upcoming({ opportunities, weekPlan, onFetchFuture }) {
 
 // ─── SECTION 4: This Week (4 best-day highlights) ────────────────────────────
 function ThisWeek({ weeklyPlan, onFetchFuture }) {
-  if (!weeklyPlan?.categories?.length) return null
+  if (!weeklyPlan?.categories?.length) return (
+    <section style={{ marginBottom:4 }}>
+      <SectionTitle>This Week</SectionTitle>
+      <Card><p style={{ fontSize:12, color:C.gray4, textAlign:'center', padding:'8px 0' }}>Loading week plan…</p></Card>
+    </section>
+  )
 
   const highlights = weeklyPlan.categories
     .filter((_, i) => i < 4)
@@ -397,7 +407,12 @@ function ThisWeek({ weeklyPlan, onFetchFuture }) {
 
 // ─── SECTION 5: Timeline ──────────────────────────────────────────────────────
 function Timeline({ timeline }) {
-  if (!timeline?.length) return null
+  if (!timeline?.length) return (
+    <section style={{ marginBottom:4 }}>
+      <SectionTitle>Today's Timeline</SectionTitle>
+      <Card><p style={{ fontSize:12, color:C.gray4, textAlign:'center', padding:'8px 0' }}>Timeline loading…</p></Card>
+    </section>
+  )
   return (
     <section aria-label="Timeline" style={{ marginBottom:4 }}>
       <SectionTitle>Today's Timeline</SectionTitle>
@@ -419,7 +434,7 @@ function Timeline({ timeline }) {
                 <Conf level={conf} size={10} />
               </div>
               <p style={{ fontSize:12, color: C.gray4, lineHeight:1.45 }}>
-                {t.recommendation || t.text || ''}
+                {t.label || t.recommendation || t.text || ''}
               </p>
             </div>
           )
