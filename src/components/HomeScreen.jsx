@@ -1,25 +1,13 @@
 /**
- * HomeScreen v29.3 — The Daily Briefing.
- *
- * One voice. One experience. Maximum value in minimum scroll.
- *
- * Priority order (cognitive load optimised):
- *   1. Morning Brief — everything you need about today, once
- *   2. Where to Focus — top 3 recommendations
- *   3. [Divider: Planning horizon begins]
- *   4. Coming Up — what deserves preparation
- *   5. This Week — best days at a glance
- *   6. [Divider: Day detail]
- *   7. Timeline — today's rhythm
- *   8. Family Today — if family configured
- *   9. Tomorrow — natural forward nudge
- *
- * Sections below the first divider recede visually — secondary info.
+ * HomeScreen v30.0 — The Daily Briefing.
+ * Context-aware: shows date, user, profile status on every render.
  */
 import { useEffect, useState } from 'react'
 import Logo from './Logo'
 import { GhostButton, Divider, SkeletonHero, SkeletonCard } from './common/index.jsx'
-import { Surface, Text, Radius, Space, FontSize, FontWeight } from '../styles/tokens/index.js'
+import DemoBanner  from './common/DemoBanner.jsx'
+import DateHeader  from './common/DateHeader.jsx'
+import { Surface, Text, Status, Radius, Space, FontSize, FontWeight } from '../styles/tokens/index.js'
 import MorningBriefSection   from './pages/today/MorningBriefSection.jsx'
 import RecommendationSection from './pages/today/RecommendationSection.jsx'
 import UpcomingSection       from './pages/today/UpcomingSection.jsx'
@@ -48,18 +36,38 @@ function Header({ primaryUser, onProfileOpen, onInvite }) {
   )
 }
 
+function ErrorState({ onRetry }) {
+  return (
+    <div style={{ textAlign:'center', padding:'40px 16px' }}>
+      <p style={{ fontSize:32, marginBottom: Space.md }}>⚠️</p>
+      <p style={{ fontSize: FontSize.CardTitle, fontWeight: FontWeight.Bold,
+        color: Text.Primary, marginBottom: Space.sm }}>
+        Couldn't load guidance
+      </p>
+      <p style={{ fontSize: FontSize.Caption, color: Text.Secondary, marginBottom: Space.xl }}>
+        Please check your connection and try again.
+      </p>
+      <button onClick={onRetry} style={{
+        background: Surface.Card, border:'none', borderRadius: Radius.button,
+        color: Text.Primary, fontSize: FontSize.Body, fontWeight: FontWeight.Bold,
+        padding:'12px 24px', cursor:'pointer', fontFamily:'inherit' }}>
+        Try Again
+      </button>
+    </div>
+  )
+}
+
 function InstallBanner({ onDismiss }) {
   function install() {
     window.__installPrompt?.prompt()
     window.__installPrompt?.userChoice?.then(() => { window.__installPrompt = null; onDismiss() })
   }
   return (
-    <div style={{ background: Surface.Card, borderRadius: Radius.card, padding:'11px 14px', marginBottom: Space.sm,
-      display:'flex', alignItems:'center', gap: Space.md }}>
+    <div style={{ background: Surface.Card, borderRadius: Radius.card, padding:'11px 14px',
+      marginBottom: Space.sm, display:'flex', alignItems:'center', gap: Space.md }}>
       <div style={{ flex:1 }}>
-        <p style={{ fontSize: FontSize.CardTitle, fontWeight: FontWeight.Bold, marginBottom:2, color: Text.Primary }}>
-          Add Kairos to your home screen
-        </p>
+        <p style={{ fontSize: FontSize.CardTitle, fontWeight: FontWeight.Bold,
+          marginBottom:2, color: Text.Primary }}>Add Kairos to your home screen</p>
         <p style={{ fontSize: FontSize.Caption, color: Text.Secondary }}>Your daily briefing in one tap</p>
       </div>
       <GhostButton onClick={install}>Install</GhostButton>
@@ -70,20 +78,13 @@ function InstallBanner({ onDismiss }) {
 }
 
 function LoadingSkeleton() {
-  return (
-    <>
-      <SkeletonHero />
-      <SkeletonCard lines={3} />
-      <SkeletonCard lines={2} />
-      <SkeletonCard lines={2} />
-    </>
-  )
+  return <><SkeletonHero /><SkeletonCard lines={3} /><SkeletonCard lines={2} /><SkeletonCard lines={2} /></>
 }
 
 export default function HomeScreen({
   brief, recommendationPackages, timeline, weeklyPlan, opportunities, diagnostics,
-  daily, loading, primaryUser,
-  onProfileOpen, onInvite, onFamilyPlan, onFetchFuture, onFeedback
+  daily, loading, status, primaryUser, profileStatus, dateContext,
+  onProfileOpen, onInvite, onFamilyPlan, onFetchFuture, onReturnToday, onFeedback
 }) {
   const [showInstall, setShowInstall] = useState(false)
   useEffect(() => {
@@ -92,29 +93,35 @@ export default function HomeScreen({
     return () => window.removeEventListener('installable', h)
   }, [])
 
+  const isError = status === 'error'
+
   return (
     <main style={{ padding:`0 ${Space.xl}px`, overflowX:'hidden', paddingBottom: Space.sm }}>
       <Header primaryUser={primaryUser} onProfileOpen={onProfileOpen} onInvite={onInvite} />
       {showInstall && <InstallBanner onDismiss={() => setShowInstall(false)} />}
+
+      {/* WS6: Demo/profile status banner */}
+      <DemoBanner profileStatus={profileStatus} onSetupProfile={onProfileOpen} />
+
+      {/* WS3: Always-visible date context */}
+      <DateHeader dateContext={dateContext} primaryUser={primaryUser}
+        profileStatus={profileStatus} onReturnToday={onReturnToday} />
+
       {import.meta.env.DEV && <DiagnosticsPanel diagnostics={diagnostics} />}
 
-      {loading ? <LoadingSkeleton /> : (
+      {loading  && <LoadingSkeleton />}
+      {isError  && <ErrorState onRetry={() => onFetchFuture(0)} />}
+      {!loading && !isError && (
         <>
-          {/* ── Primary: today's briefing ── */}
           <MorningBriefSection brief={brief} primaryUser={primaryUser} />
           <RecommendationSection packages={recommendationPackages} onFeedback={onFeedback} />
-
-          {/* ── Planning horizon ── */}
           <Divider />
           <UpcomingSection opportunities={opportunities} weeklyPlan={weeklyPlan} onFetchFuture={onFetchFuture} />
           <ThisWeekSection weeklyPlan={weeklyPlan} onFetchFuture={onFetchFuture} />
-
-          {/* ── Detail ── */}
           <Divider />
           <TimelineSection timeline={timeline} />
           <FamilyBriefSection brief={brief} daily={daily} onFamilyPlan={onFamilyPlan} />
           <TomorrowSection brief={brief} onFetchFuture={onFetchFuture} />
-
           <div style={{ textAlign:'center', padding:`${Space.xl}px 0 ${Space.sm}px`,
             borderTop:`1px solid ${Surface.Line}`, marginTop: Space.xl }}>
             <p style={{ fontSize: FontSize.Label, color: Surface.Line,

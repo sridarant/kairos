@@ -1,7 +1,6 @@
 {
-  "version": "29.0.0",
-  "phase": "4",
+  "version": "30.0.0",
   "name": "Kairos",
-  "release": "Production Readiness & Platform Freeze",
+  "release": "Product Intelligence & Context Awareness",
   "date": "2026-08-05"
 }
