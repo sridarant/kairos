@@ -280,19 +280,19 @@ function HorizonTab({ weeklyPlan, opportunities, onFetchFuture }) {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export default function PlannerScreen({ weeklyPlan, opportunities, daily, dateContext, onFetchFuture, onClose }) {
+export default function PlannerScreen({ weeklyPlan, opportunities, daily, dateContext, onFetchFuture, onClose, inline = false }) {
   const [tab, setTab] = useState('week')
   return (
     <>
-      <div onClick={onClose} style={{ position:'fixed', inset:0, background: Surface.Overlay,
-        backdropFilter:'blur(4px)', zIndex: Z.overlay }} />
-      <div className="slide-up" style={{
+      {!inline && <div onClick={onClose} style={{ position:'fixed', inset:0, background: Surface.Overlay,
+        backdropFilter:'blur(4px)', zIndex: Z.overlay }} />}
+      <div className={inline ? '' : 'slide-up'} style={inline ? {} : {
         position:'fixed', left:0, right:0, bottom:0, maxWidth:448, margin:'0 auto',
         maxHeight:'92vh', overflowY:'auto', background: Surface.Base,
         borderRadius: Radius.modal, zIndex: Z.modal }}>
-        <div style={{ padding: Pad.modal }}>
-          <div style={{ width:36, height:4, background: Surface.Line, borderRadius: Radius.sm,
-            margin:`0 auto ${Space.xl}px` }} />
+        <div style={inline ? {} : { padding: Pad.modal }}>
+          {!inline && <div style={{ width:36, height:4, background: Surface.Line, borderRadius: Radius.sm,
+            margin:`0 auto ${Space.xl}px` }} />}
           <p style={{ fontSize: FontSize.Heading3, fontWeight: FontWeight.Bold,
             marginBottom: Space.xs, color: Text.Primary }}>
             Life Planner
