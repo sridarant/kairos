@@ -190,7 +190,13 @@ export class IdentityManager {
   /** Returns profile in the legacy array format that BootstrapManager expects */
   get userProfileArray() {
     const p = this.profile
-    const primary = { name: p.name, dob: p.dob, birth_time: p.birth_time, type:'primary' }
+    // Use || '' to handle undefined fields that JSON.stringify would drop
+    const primary = {
+      name:       p.name       || '',
+      dob:        p.dob        || '',
+      birth_time: p.birth_time || '',
+      type:       'primary'
+    }
     return [primary, ...this.family]
   }
 

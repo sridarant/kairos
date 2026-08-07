@@ -37,6 +37,12 @@ export class LocalStorageProvider {
       const parsed = JSON.parse(raw)
       // Validate schema version for forward compatibility
       if (!parsed?._schemaVersion) return null
+      // Ensure critical fields are never undefined after JSON round-trip
+      if (parsed.profile) {
+        parsed.profile.name       = parsed.profile.name       || ''
+        parsed.profile.dob        = parsed.profile.dob        || ''
+        parsed.profile.birth_time = parsed.profile.birth_time || ''
+      }
       return parsed
     } catch { return null }
   }

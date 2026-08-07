@@ -1,9 +1,9 @@
 /**
- * /src/hooks/useBootstrap.js
+ * /src/hooks/useBootstrap.js v30.3.1
  *
- * Single hook — all app state and actions.
- * Delegates to BootstrapManager and IdentityManager.
- * No business logic here.
+ * Fix: initialiseApp() is now called synchronously during hook initialization,
+ * NOT inside useEffect. This ensures profileStatus and identity are correct
+ * from the very FIRST render — no flash of Demo Mode.
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
@@ -11,27 +11,29 @@ import {
   buildDevDiagnostics, buildDateContext, computeFeedbackPrefs,
   identityManager
 } from '../app/bootstrap/BootstrapManager.js'
-import { deriveProfileStatus } from '../app/config/userProfile.js'
 import { ASYNC_STATE, TABS } from '../constants/index.js'
 
+// ─── Synchronous initialisation (runs once, before first render) ──────────────
+// This is the critical fix: identity is loaded from localStorage synchronously
+// so React has the correct profileStatus on the very first render.
+const _init = initialiseApp()
+
 export function useBootstrap() {
+  // Initialise from _init so first render already has correct identity state
   const [daily,         setDaily]         = useState(null)
   const [status,        setStatus]        = useState(ASYNC_STATE.LOADING)
   const [daysAhead,     setDaysAhead]     = useState(0)
   const [tab,           setTab]           = useState(TABS.TODAY)
-  // Identity state — sourced from IdentityManager
-  const [identity,      setIdentity]      = useState(null)
-  const [profileStatus, setProfileStatus] = useState('demo')
-  // Modals
-  const [profileOpen,    setProfileOpen]   = useState(false)
-  const [inviteOpen,     setInviteOpen]    = useState(false)
-  const [insightsOpen,   setInsightsOpen]  = useState(false)
-  const [plannerOpen,    setPlannerOpen]   = useState(false)
-  const [onboardOpen,    setOnboardOpen]   = useState(false)
-  const [saveMessage,    setSaveMessage]   = useState(null)
+  const [identity,      setIdentity]      = useState(_init.identity)
+  const [profileStatus, setProfileStatus] = useState(_init.profileStatus)
+  const [onboardOpen,   setOnboardOpen]   = useState(!identityManager.isOnboarded)
+  const [profileOpen,   setProfileOpen]   = useState(false)
+  const [inviteOpen,    setInviteOpen]    = useState(false)
+  const [insightsOpen,  setInsightsOpen]  = useState(false)
+  const [plannerOpen,   setPlannerOpen]   = useState(false)
+  const [saveMessage,   setSaveMessage]   = useState(null)
 
-  // Track users ref to avoid stale closure in loadDailyInner
-  const usersRef = useRef([])
+  const usersRef = useRef(_init.users)
 
   // ── Subscribe to IdentityManager changes ──────────────────────────────────
   useEffect(() => {
@@ -43,36 +45,26 @@ export function useBootstrap() {
     return unsub
   }, [])
 
-  // ── Startup ───────────────────────────────────────────────────────────────
+  // ── Fetch recommendations on mount (identity already loaded above) ────────
   useEffect(() => {
     let cancelled = false
-    async function boot() {
+    async function fetchInitial() {
       try {
-        // Synchronous identity load — no network needed
-        const init = initialiseApp()
-        if (cancelled) return
-        setIdentity(init.identity)
-        setProfileStatus(init.profileStatus)
-        usersRef.current = init.users
-        // If no profile, show onboarding
-        if (!identityManager.isOnboarded) {
-          setOnboardOpen(true)
-        }
-        // Then fetch recommendations with whatever profile we have
-        await loadDailyInner(init.users, {}, 0)
+        await loadDailyInner(_init.users, {}, 0, cancelled)
       } catch (err) {
-        if (!cancelled) { console.error('[Bootstrap] init failed:', err.message); setStatus(ASYNC_STATE.ERROR) }
+        if (!cancelled) { console.error('[Bootstrap] initial fetch failed:', err.message); setStatus(ASYNC_STATE.ERROR) }
       }
     }
-    boot()
+    fetchInitial()
     return () => { cancelled = true }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Fetch daily ───────────────────────────────────────────────────────────
-  async function loadDailyInner(users, feedbackAdj, days) {
+  async function loadDailyInner(users, feedbackAdj, days, cancelledRef) {
     setStatus(ASYNC_STATE.LOADING)
     try {
       const raw = await fetchDailyAPI(users, feedbackAdj, days)
+      if (cancelledRef === true) return  // handle the boolean cancel flag
       setDaily(raw)
       setDaysAhead(days)
       setStatus(ASYNC_STATE.SUCCESS)
@@ -96,7 +88,6 @@ export function useBootstrap() {
     identityManager.saveUsersArray(updatedUsers)
     setSaveMessage('Profile saved — recommendations updated.')
     setTimeout(() => setSaveMessage(null), 3000)
-    // Reload recommendations with new identity — synchronous state now updated
     await loadDailyInner(updatedUsers, {}, 0)
   }, [])
 
@@ -150,20 +141,15 @@ export function useBootstrap() {
   }, [])
 
   return {
-    // State
     daily, status, tab, daysAhead, dateContext,
     identity, primaryUser, users, profileStatus,
     saveMessage,
-    // DTOs
     ...dtos, diagnostics,
-    // Modals
     profileOpen, inviteOpen, insightsOpen, plannerOpen, onboardOpen,
-    // Actions
     handleSaveUsers, handleFeedback, handleTabChange,
     handleFetchFuture, handleReturnToday,
     handleExportProfile, handleImportProfile, handleDeleteProfile,
     handleOnboardComplete,
-    // Modal toggles
     openProfile:   () => setProfileOpen(true),
     closeProfile:  () => setProfileOpen(false),
     openInvite:    () => setInviteOpen(true),
