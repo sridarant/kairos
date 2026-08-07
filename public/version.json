@@ -1,6 +1,6 @@
 {
-  "version": "30.3.1",
+  "version": "30.3.2",
   "name": "Kairos",
-  "release": "Identity Persistence Fix",
+  "release": "Identity Architecture — Single Source of Truth",
   "date": "2026-08-07"
 }

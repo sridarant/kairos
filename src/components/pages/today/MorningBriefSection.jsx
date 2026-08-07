@@ -9,7 +9,7 @@
  * It does NOT repeat the top recommendation (that's the card's job).
  */
 import { useEffect, useState } from 'react'
-import { minsUntilWindow } from '../../../lib/dataClient.js'
+import { minsUntilWindow } from '../../../lib/utils.js'
 import { StarRating, ConfidenceBadge } from '../../common/index.jsx'
 import {
   Surface, Text, Status, Outlook as OutlookC, Accent,

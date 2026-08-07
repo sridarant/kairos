@@ -1,118 +1,86 @@
 /**
  * /src/identity/IdentityRepository.js
  *
- * Repository abstraction for identity storage.
- * The application never calls localStorage, sessionStorage, or fetch directly.
- * Future providers (Supabase, encrypted storage, cloud sync) implement the same interface.
+ * Responsible ONLY for:
+ *   - Read from storage
+ *   - Write to storage
+ *   - Delete from storage
+ *   - Schema version validation
  *
- * Interface:
- *   load()          → KairosIdentity | null
- *   save(identity)  → void
- *   clear()         → void
- *   export()        → string (JSON)
- *   import(json)    → KairosIdentity | Error
+ * No business logic. No migrations. No fallbacks beyond the storage layer.
+ * Migrations live in IdentityManager.
  *
- * Current providers (in priority order):
- *   1. LocalStorageProvider — always-available offline store (authoritative)
- *   2. MemoryProvider       — fallback when localStorage is blocked (private browsing)
- *
- * Future providers attach here without touching IdentityManager or BootstrapManager.
+ * Storage key: 'kairos_identity_v1' — the ONE canonical key, forever.
  */
 
-const STORAGE_KEY = 'kairos_identity_v1'
-const SCHEMA_VERSION = 1
+export const STORAGE_KEY    = 'kairos_identity_v1'
+export const SCHEMA_VERSION = 1
 
-// ─── LocalStorage provider ────────────────────────────────────────────────────
+// ─── LocalStorageProvider ────────────────────────────────────────────────────
 
 export class LocalStorageProvider {
+  /** true when localStorage is readable and writable */
   get available() {
-    try { localStorage.setItem('__k', '1'); localStorage.removeItem('__k'); return true }
-    catch { return false }
+    try {
+      localStorage.setItem('__kairos_test', '1')
+      localStorage.removeItem('__kairos_test')
+      return true
+    } catch {
+      return false
+    }
   }
 
+  /** Returns the raw parsed object from storage, or null if absent/corrupt. */
   load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (!raw) return null
       const parsed = JSON.parse(raw)
-      // Validate schema version for forward compatibility
-      if (!parsed?._schemaVersion) return null
-      // Ensure critical fields are never undefined after JSON round-trip
-      if (parsed.profile) {
-        parsed.profile.name       = parsed.profile.name       || ''
-        parsed.profile.dob        = parsed.profile.dob        || ''
-        parsed.profile.birth_time = parsed.profile.birth_time || ''
-      }
+      if (typeof parsed !== 'object' || Array.isArray(parsed) || !parsed) return null
+      if (!parsed._schemaVersion) return null
       return parsed
-    } catch { return null }
-  }
-
-  save(identity) {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(identity)) }
-    catch (e) { console.warn('[IdentityRepository] localStorage write failed:', e.message) }
-  }
-
-  clear() {
-    try { localStorage.removeItem(STORAGE_KEY) }
-    catch { /* ignore */ }
-  }
-
-  export() {
-    const data = this.load()
-    if (!data) throw new Error('No identity to export')
-    return JSON.stringify({ ...data, _exportedAt: new Date().toISOString() }, null, 2)
-  }
-
-  import(json) {
-    try {
-      const parsed = JSON.parse(json)
-      if (!parsed?._schemaVersion) throw new Error('Invalid Kairos profile format')
-      // Strip export metadata before saving
-      const { _exportedAt, ...clean } = parsed
-      this.save(clean)
-      return clean
-    } catch (e) {
-      throw new Error(`Import failed: ${e.message}`)
+    } catch {
+      return null
     }
+  }
+
+  /** Persists the identity object. Throws if write fails. */
+  save(identity) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(identity))
+    } catch (e) {
+      console.error('[IdentityRepository] Write failed:', e.message)
+    }
+  }
+
+  /** Removes the identity from storage. */
+  clear() {
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+    } catch { /* ignore */ }
   }
 }
 
-// ─── Memory provider (private browsing fallback) ──────────────────────────────
+// ─── MemoryProvider (private browsing / SSR fallback) ────────────────────────
 
 export class MemoryProvider {
-  constructor() { this._store = null }
-  get available() { return true }
+  constructor()  { this._store = null }
+  get available(){ return true }
   load()         { return this._store }
   save(identity) { this._store = identity }
   clear()        { this._store = null }
-  export()       {
-    if (!this._store) throw new Error('No identity to export')
-    return JSON.stringify({ ...this._store, _exportedAt: new Date().toISOString() }, null, 2)
-  }
-  import(json)   {
-    const parsed = JSON.parse(json)
-    if (!parsed?._schemaVersion) throw new Error('Invalid Kairos profile format')
-    const { _exportedAt, ...clean } = parsed
-    this._store = clean
-    return clean
-  }
 }
 
-// ─── Composite: tries LocalStorage first, falls back to Memory ───────────────
+// ─── CompositeProvider — used by the singleton IdentityManager ───────────────
 
 export class CompositeProvider {
   constructor() {
-    this._ls  = new LocalStorageProvider()
-    this._mem = new MemoryProvider()
-    this._primary = this._ls.available ? this._ls : this._mem
+    const ls  = new LocalStorageProvider()
+    this._provider = ls.available ? ls : new MemoryProvider()
   }
 
-  get storageType() { return this._ls.available ? 'localStorage' : 'memory' }
-  load()            { return this._primary.load() }
-  save(identity)    { this._primary.save(identity) }
-  clear()           { this._primary.clear() }
-  export()          { return this._primary.export() }
-  import(json)      { return this._primary.import(json) }
+  get storageType() { return this._provider instanceof LocalStorageProvider ? 'localStorage' : 'memory' }
+  load()            { return this._provider.load() }
+  save(identity)    { this._provider.save(identity) }
+  clear()           { this._provider.clear() }
 }
-
-export const SCHEMA_V = SCHEMA_VERSION

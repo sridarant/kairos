@@ -1,75 +1,70 @@
 /**
  * /src/identity/IdentityManager.js
  *
- * Single source of truth for user identity.
- * BootstrapManager reads from here — no other module reads localStorage directly.
+ * THE ONLY public interface for identity. No component, hook, or service
+ * accesses localStorage or the repository directly — they go through here.
  *
- * KairosIdentity schema v1:
+ * Canonical Identity schema v1:
  * {
  *   _schemaVersion: 1,
  *   _createdAt:     ISO string,
  *   _updatedAt:     ISO string,
- *   uid:            string,       // stable anonymous ID, never changes
+ *   uid:            string,        // stable, anonymous, never changes
  *   profile: {
  *     name:         string,
  *     dob:          "DD-MM-YYYY",
  *     birth_time:   "HH:MM",
  *     birth_place:  string,
- *     timezone:     string,       // IANA tz, e.g. "Asia/Kolkata"
+ *     timezone:     string,        // IANA e.g. "Asia/Kolkata"
  *     gender:       string | null
  *   },
- *   family:   UserProfile[],       // same shape as profile, type:"family"
+ *   family: [
+ *     { name, dob, birth_time, birth_place, timezone, gender }
+ *   ],
  *   prefs: {
- *     theme:        "dark",
+ *     theme:         "dark",
  *     notifications: boolean,
- *     language:     "en"
+ *     language:      "en"
  *   },
  *   appState: {
  *     onboardingComplete: boolean,
- *     feedbackHistory:    object[],
- *     usageStats:         object
+ *     feedbackHistory:    [{ category, action, outcome, timestamp }],
+ *     usageStats:         { sessions: number, lastOpen: ISO string | null }
  *   }
  * }
- *
- * Architecture contract (enforced by this module):
- *   - IdentityManager is the ONLY writer of identity data
- *   - Future auth providers call attachAuth(authToken) — does NOT change schema
- *   - Cloud sync will add _syncedAt and _syncProvider fields without schema redesign
- *   - Schema migrations run automatically on load via migrateSchema()
  */
 
-import { CompositeProvider, SCHEMA_V } from './IdentityRepository.js'
-import { deriveProfileStatus }          from '../app/config/userProfile.js'
+import { CompositeProvider, SCHEMA_VERSION } from './IdentityRepository.js'
+import { deriveProfileStatus }               from '../app/config/userProfile.js'
 
-// ─── Schema factory ───────────────────────────────────────────────────────────
+// ─── Internal: schema helpers ─────────────────────────────────────────────────
 
-function newUid() {
+function uid() {
   return `k_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+}
+
+function blankProfile() {
+  return {
+    name:        '',
+    dob:         '',
+    birth_time:  '',
+    birth_place: '',
+    timezone:    (typeof Intl !== 'undefined'
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone : '') || '',
+    gender:      null
+  }
 }
 
 function newIdentity(partial = {}) {
   const now = new Date().toISOString()
   return {
-    _schemaVersion: SCHEMA_V,
+    _schemaVersion: SCHEMA_VERSION,
     _createdAt:     now,
     _updatedAt:     now,
-    uid:            newUid(),
-    profile: {
-      name:       '',
-      dob:        '',
-      birth_time: '',
-      birth_place:'',
-      timezone:   Intl.DateTimeFormat().resolvedOptions().timeZone || '',
-      gender:     null,
-      ...partial.profile
-    },
-    family:   partial.family   || [],
-    prefs:    {
-      theme:         'dark',
-      notifications: false,
-      language:      'en',
-      ...partial.prefs
-    },
+    uid:            uid(),
+    profile:        { ...blankProfile(), ...partial.profile },
+    family:         partial.family  || [],
+    prefs:          { theme:'dark', notifications:false, language:'en', ...partial.prefs },
     appState: {
       onboardingComplete: false,
       feedbackHistory:    [],
@@ -79,272 +74,266 @@ function newIdentity(partial = {}) {
   }
 }
 
-// ─── Schema migration (future-proof) ─────────────────────────────────────────
+/**
+ * migrate(raw) — upgrades any stored object to the current schema.
+ * Handles only objects that already have _schemaVersion (written by this system).
+ * If an object has no _schemaVersion it cannot be trusted and returns null.
+ */
+function migrate(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  if (!raw._schemaVersion) return null   // unknown format — reject
 
-function migrateSchema(raw) {
-  if (!raw) return null
-  let identity = { ...raw }
+  const identity = { ...raw }
 
-  // v0 → v1: old format had flat user_profile array, not a schema-versioned object
-  if (!identity._schemaVersion) {
-    const oldProfile = Array.isArray(identity.user_profile) ? identity.user_profile[0] : null
-    const oldFamily  = Array.isArray(identity.user_profile) ? identity.user_profile.slice(1) : []
-    identity = newIdentity({
-      profile: oldProfile ? {
-        name:       oldProfile.name       || '',
-        dob:        oldProfile.dob        || '',
-        birth_time: oldProfile.birth_time || '',
-      } : undefined,
-      family: oldFamily.map(m => ({
-        name: m.name || '', dob: m.dob || '', birth_time: m.birth_time || '', type:'family'
-      }))
-    })
-    if (identity.profile.name) identity.appState.onboardingComplete = true
+  // Fill any fields added in later schema versions
+  identity.profile  = { ...blankProfile(), ...identity.profile }
+  identity.family   = Array.isArray(identity.family) ? identity.family : []
+  identity.prefs    = { theme:'dark', notifications:false, language:'en', ...identity.prefs }
+  identity.appState = {
+    onboardingComplete: false,
+    feedbackHistory:    [],
+    usageStats:         { sessions:0, lastOpen:null },
+    ...identity.appState
   }
-
-  // Ensure all fields exist (forward-compat for users on older saves)
-  identity.profile    ??= {}
-  identity.family     ??= []
-  identity.prefs      ??= { theme:'dark', notifications:false, language:'en' }
-  identity.appState   ??= { onboardingComplete:false, feedbackHistory:[], usageStats:{} }
-  identity.appState.feedbackHistory ??= []
-  identity.appState.usageStats      ??= { sessions:0, lastOpen:null }
-  identity._schemaVersion = SCHEMA_V
+  identity.appState.feedbackHistory = Array.isArray(identity.appState.feedbackHistory)
+    ? identity.appState.feedbackHistory : []
+  identity._schemaVersion = SCHEMA_VERSION
 
   return identity
 }
 
-// ─── Validation ───────────────────────────────────────────────────────────────
+// ─── Internal: validation ─────────────────────────────────────────────────────
 
-function validateProfile(profile) {
-  const errors = []
-  if (!profile) return errors
-
-  const name = (profile.name || '').trim()
-  if (!name) errors.push('Name is required')
-  if (name.length > 100) errors.push('Name is too long (max 100 characters)')
-
-  const dob = (profile.dob || '').trim()
-  if (dob) {
-    const parts = dob.split('-')
-    const [d, m, y] = [parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2])]
-    if (parts.length !== 3 || isNaN(d) || isNaN(m) || isNaN(y)) {
-      errors.push('Date of birth must be in DD-MM-YYYY format')
-    } else if (d < 1 || d > 31 || m < 1 || m > 12 || y < 1900 || y > new Date().getFullYear()) {
-      errors.push('Date of birth appears invalid')
-    }
-  }
-
-  const bt = (profile.birth_time || '').trim()
-  if (bt) {
-    const [h, mn] = bt.split(':').map(Number)
-    if (isNaN(h) || isNaN(mn) || h < 0 || h > 23 || mn < 0 || mn > 59) {
-      errors.push('Birth time must be in HH:MM format (24-hour)')
-    }
-  }
-
-  return errors
+function validateBeforeSave(identity) {
+  if (!identity || typeof identity !== 'object') return ['Identity must be an object']
+  if (!identity._schemaVersion)                  return ['Missing schema version']
+  if (!identity.uid)                             return ['Missing uid']
+  return []  // valid
 }
 
 // ─── IdentityManager ─────────────────────────────────────────────────────────
 
 export class IdentityManager {
   constructor(provider = new CompositeProvider()) {
-    this._repo     = provider
-    this._identity = null   // in-memory cache, authoritative after load()
+    this._repo      = provider
+    this._identity  = null
     this._listeners = []
   }
 
-  // ── Observers (React hooks subscribe here) ─────────────────────────────────
+  // ── Observer / pub-sub ────────────────────────────────────────────────────
   subscribe(fn) {
     this._listeners.push(fn)
     return () => { this._listeners = this._listeners.filter(l => l !== fn) }
   }
   _notify() { this._listeners.forEach(fn => fn(this._identity)) }
 
-  // ── Load ──────────────────────────────────────────────────────────────────
+  // ── Public API ────────────────────────────────────────────────────────────
+
   /**
-   * load() → KairosIdentity
-   * Called once at app start. Migrates old schemas automatically.
+   * load() — reads from storage, runs migration, populates in-memory cache.
+   * Returns the identity (never null — falls back to a fresh blank identity).
+   * MUST be called before any other method.
    */
   load() {
-    const raw = this._repo.load()
-    this._identity = migrateSchema(raw) || newIdentity()
-    if (!raw) {
-      // First run — persist the new identity immediately
-      this._persist()
+    const raw      = this._repo.load()
+    const migrated = migrate(raw)
+
+    if (migrated) {
+      this._identity = migrated
+    } else {
+      // First run or corrupt data — start fresh
+      this._identity = newIdentity()
+      this._repo.save(this._identity)
     }
+
     return this._identity
   }
 
-  // ── Getters ───────────────────────────────────────────────────────────────
-  get identity()       { return this._identity }
-  get uid()            { return this._identity?.uid }
-  get profile()        { return this._identity?.profile || {} }
-  get family()         { return this._identity?.family  || [] }
-  get prefs()          { return this._identity?.prefs   || {} }
-  get appState()       { return this._identity?.appState || {} }
-  get isOnboarded()    { return this._identity?.appState?.onboardingComplete ?? false }
-  get storageType()    { return this._repo.storageType }
+  /**
+   * save(updates) — merges updates into the identity and persists.
+   * Validates before writing. Returns { ok, errors }.
+   */
+  save(updates = {}) {
+    if (!this._identity) throw new Error('Call load() before save()')
+    const next = {
+      ...this._identity,
+      ...updates,
+      _updatedAt: new Date().toISOString()
+    }
+    const errors = validateBeforeSave(next)
+    if (errors.length) return { ok: false, errors }
+    this._identity = next
+    this._repo.save(this._identity)
+    this._notify()
+    return { ok: true, errors: [] }
+  }
 
-  /** Returns profile in the legacy array format that BootstrapManager expects */
-  get userProfileArray() {
+  /**
+   * update(section, fields) — merges fields into a top-level section.
+   * e.g. update('profile', { name:'Priya', dob:'15-03-1990' })
+   */
+  update(section, fields) {
+    if (!this._identity) throw new Error('Call load() before update()')
+    const next = {
+      ...this._identity,
+      [section]:   { ...this._identity[section], ...fields },
+      _updatedAt:  new Date().toISOString()
+    }
+    const errors = validateBeforeSave(next)
+    if (errors.length) { console.warn('[IdentityManager] update() rejected:', errors); return { ok:false, errors } }
+    this._identity = next
+    this._repo.save(this._identity)
+    this._notify()
+    return { ok: true, errors: [] }
+  }
+
+  /**
+   * clear() — removes identity from storage and resets to a blank state.
+   */
+  clear() {
+    this._repo.clear()
+    this._identity = newIdentity()
+    this._repo.save(this._identity)
+    this._notify()
+  }
+
+  /**
+   * export() — returns the canonical identity as a JSON string.
+   */
+  export() {
+    if (!this._identity) throw new Error('Call load() before export()')
+    return JSON.stringify({
+      ...this._identity,
+      _exportedAt: new Date().toISOString(),
+      _exportVersion: '30.3.2'
+    }, null, 2)
+  }
+
+  /**
+   * import(json) — restores identity from an exported JSON string.
+   * Returns { ok, errors }.
+   */
+  import(json) {
+    let parsed
+    try { parsed = JSON.parse(json) } catch (e) { return { ok:false, errors:['Invalid JSON: ' + e.message] } }
+
+    const migrated = migrate(parsed)
+    if (!migrated) return { ok:false, errors:['Not a valid Kairos identity file'] }
+
+    const errors = validateBeforeSave(migrated)
+    if (errors.length) return { ok:false, errors }
+
+    this._identity = migrated
+    this._repo.save(this._identity)
+    this._notify()
+    return { ok:true, errors:[] }
+  }
+
+  // ── Convenience writers (used by OnboardingModal and ProfileModal) ────────
+
+  /**
+   * saveProfile(profileFields, familyArray) — primary entry point for
+   * onboarding completion and profile edits.
+   */
+  saveProfile(profileFields, familyArray = []) {
+    if (!this._identity) throw new Error('Call load() before saveProfile()')
+    this._identity = {
+      ...this._identity,
+      profile: {
+        ...blankProfile(),
+        ...profileFields,
+        // Guard against undefined surviving JSON round-trips
+        name:       (profileFields.name       || '').trim(),
+        dob:        (profileFields.dob        || '').trim(),
+        birth_time: (profileFields.birth_time || '').trim(),
+      },
+      family:     familyArray.map(m => ({
+        name:       (m.name       || '').trim(),
+        dob:        (m.dob        || '').trim(),
+        birth_time: (m.birth_time || '').trim(),
+        birth_place:(m.birth_place|| '').trim(),
+        timezone:   m.timezone || '',
+        gender:     m.gender   || null
+      })),
+      appState: {
+        ...this._identity.appState,
+        onboardingComplete: true
+      },
+      _updatedAt: new Date().toISOString()
+    }
+    this._repo.save(this._identity)
+    this._notify()
+  }
+
+  /** Adds a feedback entry to the history (capped at 500). */
+  addFeedback(category, action, outcome) {
+    if (!this._identity) return
+    this._identity.appState.feedbackHistory = [
+      ...this._identity.appState.feedbackHistory.slice(-499),
+      { category, action: String(action).slice(0, 100), outcome, timestamp: new Date().toISOString() }
+    ]
+    this._identity._updatedAt = new Date().toISOString()
+    this._repo.save(this._identity)
+  }
+
+  /** Increments session counter and records last-open timestamp. */
+  trackOpen() {
+    if (!this._identity) return
+    this._identity.appState.usageStats.sessions =
+      (this._identity.appState.usageStats.sessions || 0) + 1
+    this._identity.appState.usageStats.lastOpen = new Date().toISOString()
+    this._identity._updatedAt = new Date().toISOString()
+    this._repo.save(this._identity)
+  }
+
+  // ── Getters ───────────────────────────────────────────────────────────────
+
+  get identity()    { return this._identity }
+  get uid()         { return this._identity?.uid }
+  get profile()     { return this._identity?.profile || blankProfile() }
+  get family()      { return this._identity?.family  || [] }
+  get prefs()       { return this._identity?.prefs   || {} }
+  get appState()    { return this._identity?.appState || {} }
+  get isOnboarded() { return Boolean(this._identity?.appState?.onboardingComplete) }
+  get storageType() { return this._repo.storageType }
+
+  /**
+   * primaryUser — the profile object shaped for /api/daily.
+   * Always returns an object (never null).
+   */
+  get primaryUser() {
     const p = this.profile
-    // Use || '' to handle undefined fields that JSON.stringify would drop
-    const primary = {
+    return {
       name:       p.name       || '',
       dob:        p.dob        || '',
       birth_time: p.birth_time || '',
       type:       'primary'
     }
-    return [primary, ...this.family]
   }
 
-  get profileStatus() {
-    return deriveProfileStatus(this.userProfileArray)
-  }
-
-  // ── Update profile ────────────────────────────────────────────────────────
-  updateProfile(updates) {
-    if (!this._identity) throw new Error('IdentityManager not loaded')
-    const errors = validateProfile({ ...this._identity.profile, ...updates })
-    // Non-fatal: we warn but don't block
-    if (errors.length) console.warn('[IdentityManager] Profile validation:', errors)
-    this._identity = {
-      ...this._identity,
-      profile:    { ...this._identity.profile, ...updates },
-      _updatedAt: new Date().toISOString()
-    }
-    this._persist()
-    this._notify()
-    return { errors }
-  }
-
-  updateFamily(familyArray) {
-    if (!this._identity) throw new Error('IdentityManager not loaded')
-    this._identity = {
-      ...this._identity,
-      family:     familyArray.map(m => ({ ...m, type:'family' })),
-      _updatedAt: new Date().toISOString()
-    }
-    this._persist()
-    this._notify()
-  }
-
-  updatePrefs(prefUpdates) {
-    if (!this._identity) throw new Error('IdentityManager not loaded')
-    this._identity = {
-      ...this._identity,
-      prefs:      { ...this._identity.prefs, ...prefUpdates },
-      _updatedAt: new Date().toISOString()
-    }
-    this._persist()
-    this._notify()
-  }
-
-  /** Save the full array format from ProfileModal in one call */
-  saveUsersArray(usersArray) {
-    if (!usersArray?.length) return
-    const [primary, ...family] = usersArray
-    this.updateProfile({
-      name:       primary.name       || '',
-      dob:        primary.dob        || '',
-      birth_time: primary.birth_time || '',
-      birth_place:primary.birth_place|| '',
-    })
-    this._identity.family = family.map(m => ({ ...m, type:'family' }))
-    this._identity.appState.onboardingComplete = true
-    this._identity._updatedAt = new Date().toISOString()
-    this._persist()
-    this._notify()
-  }
-
-  completeOnboarding() {
-    if (!this._identity) return
-    this._identity.appState.onboardingComplete = true
-    this._identity._updatedAt = new Date().toISOString()
-    this._persist()
-    this._notify()
-  }
-
-  // ── Feedback / history ────────────────────────────────────────────────────
-  addFeedback(category, action, outcome) {
-    if (!this._identity) return
-    const entry = { category, action:String(action).slice(0,100), outcome,
-      timestamp: new Date().toISOString() }
-    this._identity.appState.feedbackHistory = [
-      ...this._identity.appState.feedbackHistory.slice(-499), entry
-    ]
-    this._identity._updatedAt = new Date().toISOString()
-    this._persist()
-  }
-
-  trackOpen() {
-    if (!this._identity) return
-    const s = this._identity.appState.usageStats
-    s.sessions = (s.sessions || 0) + 1
-    s.lastOpen = new Date().toISOString()
-    this._identity._updatedAt = new Date().toISOString()
-    this._persist()
-  }
-
-  // ── Export / Import ───────────────────────────────────────────────────────
-  exportJSON() {
-    if (!this._identity) throw new Error('No identity loaded')
-    return JSON.stringify({
-      ...this._identity,
-      _exportedAt: new Date().toISOString(),
-      _appVersion: '30.3'
-    }, null, 2)
-  }
-
-  importJSON(json) {
-    try {
-      const parsed = JSON.parse(json)
-      if (!parsed || typeof parsed !== 'object') throw new Error('Not a valid JSON object')
-      const migrated = migrateSchema(parsed)
-      if (!migrated) throw new Error('Could not parse identity file')
-      this._identity = migrated
-      this._persist()
-      this._notify()
-      return { ok: true, identity: this._identity }
-    } catch(e) {
-      return { ok: false, error: e.message }
-    }
-  }
-
-  // ── Delete ────────────────────────────────────────────────────────────────
-  deleteIdentity() {
-    this._repo.clear()
-    this._identity = newIdentity()
-    this._persist()
-    this._notify()
-  }
-
-  // ── Auth attachment point (for future login — no schema change needed) ────
   /**
-   * attachAuth(authToken, provider)
-   * Called by future auth layer after login.
-   * Adds auth fields without touching profile/family/prefs.
+   * allUsers — primary + family, as an array for /api/daily.
    */
-  attachAuth(authToken, provider) {
-    if (!this._identity) return
-    this._identity._auth = { token: authToken, provider, attachedAt: new Date().toISOString() }
-    this._persist()
+  get allUsers() {
+    return [this.primaryUser, ...this.family.map(m => ({
+      name:       m.name       || '',
+      dob:        m.dob        || '',
+      birth_time: m.birth_time || '',
+      type:       'family'
+    }))]
   }
 
-  detachAuth() {
-    if (!this._identity) return
-    delete this._identity._auth
-    this._persist()
-  }
-
-  // ── Internal ─────────────────────────────────────────────────────────────
-  _persist() {
-    if (this._identity) this._repo.save(this._identity)
+  /**
+   * profileStatus — derived, never stored.
+   */
+  get profileStatus() {
+    const p = this.profile
+    if (!p.name?.trim())       return 'demo'
+    if (!p.dob?.trim())        return 'incomplete'
+    if (!p.birth_time?.trim()) return 'basic'
+    return 'personalised'
   }
 }
 
-// ─── Singleton ────────────────────────────────────────────────────────────────
-// Exported as a module-level singleton so all imports share the same instance.
+// ─── Module singleton ─────────────────────────────────────────────────────────
 export const identityManager = new IdentityManager()
