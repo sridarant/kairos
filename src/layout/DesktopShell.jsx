@@ -224,7 +224,7 @@ export default function DesktopShell({ bs, loading }) {
 
       <RightPanel bs={bs} activeTab={activeTab} loading={loading} />
 
-      {bs.profileOpen  && <ProfileModal  onClose={bs.closeProfile}  users={bs.users} onSave={bs.handleSaveUsers} />}
+      {bs.profileOpen  && <ProfileModal  onClose={bs.closeProfile}  users={bs.users} onSave={bs.handleSaveUsers} onExport={bs.handleExportProfile} onImport={bs.handleImportProfile} onDelete={bs.handleDeleteProfile} />}
       {bs.inviteOpen   && <InviteModal   onClose={bs.closeInvite} />}
       {bs.insightsOpen && <InsightsModal onClose={bs.closeInsights} userData={bs.userData} />}
     </div>

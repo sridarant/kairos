@@ -2,42 +2,64 @@
  * /src/hooks/useBootstrap.js
  *
  * Single hook — all app state and actions.
- * Delegates entirely to BootstrapManager. No business logic here.
+ * Delegates to BootstrapManager and IdentityManager.
+ * No business logic here.
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   initialiseApp, fetchDailyAPI, buildApplicationDTOs,
   buildDevDiagnostics, buildDateContext, computeFeedbackPrefs,
-  saveProfile, trackFeedback, computeAnalytics
+  identityManager
 } from '../app/bootstrap/BootstrapManager.js'
-import { ASYNC_STATE, TABS } from '../constants/index.js'
 import { deriveProfileStatus } from '../app/config/userProfile.js'
+import { ASYNC_STATE, TABS } from '../constants/index.js'
 
 export function useBootstrap() {
   const [daily,         setDaily]         = useState(null)
   const [status,        setStatus]        = useState(ASYNC_STATE.LOADING)
   const [daysAhead,     setDaysAhead]     = useState(0)
   const [tab,           setTab]           = useState(TABS.TODAY)
-  const [userData,      setUserData]      = useState(null)
-  const [userPrefs,     setUserPrefs]     = useState({})
+  // Identity state — sourced from IdentityManager
+  const [identity,      setIdentity]      = useState(null)
   const [profileStatus, setProfileStatus] = useState('demo')
   // Modals
-  const [profileOpen,   setProfileOpen]   = useState(false)
-  const [inviteOpen,    setInviteOpen]    = useState(false)
-  const [insightsOpen,  setInsightsOpen]  = useState(false)
-  const [plannerOpen,   setPlannerOpen]   = useState(false)
+  const [profileOpen,    setProfileOpen]   = useState(false)
+  const [inviteOpen,     setInviteOpen]    = useState(false)
+  const [insightsOpen,   setInsightsOpen]  = useState(false)
+  const [plannerOpen,    setPlannerOpen]   = useState(false)
+  const [onboardOpen,    setOnboardOpen]   = useState(false)
+  const [saveMessage,    setSaveMessage]   = useState(null)
 
-  // ── Startup ────────────────────────────────────────────────────────────────
+  // Track users ref to avoid stale closure in loadDailyInner
+  const usersRef = useRef([])
+
+  // ── Subscribe to IdentityManager changes ──────────────────────────────────
+  useEffect(() => {
+    const unsub = identityManager.subscribe((newIdentity) => {
+      setIdentity(newIdentity)
+      setProfileStatus(identityManager.profileStatus)
+      usersRef.current = identityManager.userProfileArray
+    })
+    return unsub
+  }, [])
+
+  // ── Startup ───────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
     async function boot() {
       try {
-        const init = await initialiseApp()
+        // Synchronous identity load — no network needed
+        const init = initialiseApp()
         if (cancelled) return
-        setUserData(init.userData)
-        setUserPrefs(init.userPrefs)
+        setIdentity(init.identity)
         setProfileStatus(init.profileStatus)
-        await loadDailyInner(init.users, init.feedbackAdj, 0)
+        usersRef.current = init.users
+        // If no profile, show onboarding
+        if (!identityManager.isOnboarded) {
+          setOnboardOpen(true)
+        }
+        // Then fetch recommendations with whatever profile we have
+        await loadDailyInner(init.users, {}, 0)
       } catch (err) {
         if (!cancelled) { console.error('[Bootstrap] init failed:', err.message); setStatus(ASYNC_STATE.ERROR) }
       }
@@ -46,7 +68,7 @@ export function useBootstrap() {
     return () => { cancelled = true }
   }, [])
 
-  // ── Internal load ─────────────────────────────────────────────────────────
+  // ── Fetch daily ───────────────────────────────────────────────────────────
   async function loadDailyInner(users, feedbackAdj, days) {
     setStatus(ASYNC_STATE.LOADING)
     try {
@@ -62,39 +84,50 @@ export function useBootstrap() {
   }
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const users       = useMemo(() => Array.isArray(userData?.user_profile) ? userData.user_profile : [], [userData])
+  const users       = useMemo(() => identity ? identityManager.userProfileArray : [], [identity])
   const primaryUser = useMemo(() => users[0] || null, [users])
-  const feedbackAdj = useMemo(() => computeAnalytics(userData?.history || []), [userData])
+  const userPrefs   = useMemo(() => computeFeedbackPrefs(identity?.appState?.feedbackHistory || []), [identity])
   const dateContext = useMemo(() => buildDateContext(daysAhead), [daysAhead])
-
-  // ── DTOs ──────────────────────────────────────────────────────────────────
   const dtos        = useMemo(() => buildApplicationDTOs(daily, userPrefs), [daily, userPrefs])
   const diagnostics = useMemo(() => buildDevDiagnostics(dtos), [dtos])
 
   // ── Actions ───────────────────────────────────────────────────────────────
-  const loadDaily = useCallback(async (days = 0) => {
-    await loadDailyInner(users, feedbackAdj, days)
-  }, [users, feedbackAdj])
-
   const handleSaveUsers = useCallback(async (updatedUsers) => {
-    await saveProfile(updatedUsers)
-    const fresh = { ...userData, user_profile: updatedUsers }
-    setUserData(fresh)
-    const prefs = computeFeedbackPrefs(fresh.feedback || [])
-    setUserPrefs(prefs)
-    setProfileStatus(deriveProfileStatus(updatedUsers))
-    await loadDailyInner(updatedUsers, computeAnalytics(fresh.history || []), 0)
-  }, [userData])
+    identityManager.saveUsersArray(updatedUsers)
+    setSaveMessage('Profile saved — recommendations updated.')
+    setTimeout(() => setSaveMessage(null), 3000)
+    // Reload recommendations with new identity — synchronous state now updated
+    await loadDailyInner(updatedUsers, {}, 0)
+  }, [])
 
-  const handleFeedback = useCallback(async (category, action, outcome) => {
-    await trackFeedback(category, action, outcome)
-    setUserPrefs(prev => {
-      const p = { ...(prev[category] || {}) }
-      if (outcome === 'helpful')     p.helpful     = (p.helpful || 0) + 1
-      if (outcome === 'not_helpful') p.not_helpful = (p.not_helpful || 0) + 1
-      if (outcome === 'skipped')     p.skipped     = (p.skipped || 0) + 1
-      return { ...prev, [category]: p }
-    })
+  const handleFeedback = useCallback((category, action, outcome) => {
+    identityManager.addFeedback(category, action, outcome)
+  }, [])
+
+  const handleExportProfile = useCallback(() => {
+    try {
+      const json = identityManager.exportJSON()
+      const blob = new Blob([json], { type:'application/json' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href = url; a.download = 'kairos-profile.json'; a.click()
+      URL.revokeObjectURL(url)
+    } catch(e) { console.error('Export failed:', e.message) }
+  }, [])
+
+  const handleImportProfile = useCallback(async (json) => {
+    const result = identityManager.importJSON(json)
+    if (!result.ok) return { ok:false, error: result.error }
+    setSaveMessage('Profile imported — recommendations updated.')
+    setTimeout(() => setSaveMessage(null), 3000)
+    await loadDailyInner(identityManager.userProfileArray, {}, 0)
+    return { ok: true }
+  }, [])
+
+  const handleDeleteProfile = useCallback(async () => {
+    identityManager.deleteIdentity()
+    setOnboardOpen(true)
+    await loadDailyInner([], {}, 0)
   }, [])
 
   const handleTabChange = useCallback((t) => {
@@ -105,20 +138,31 @@ export function useBootstrap() {
     if (t === TABS.TODAY)   { setPlannerOpen(false); setInsightsOpen(false) }
   }, [])
 
-  const handleFetchFuture = useCallback((days) => loadDaily(days), [loadDaily])
-  const handleReturnToday  = useCallback(() => loadDaily(0),    [loadDaily])
+  const handleFetchFuture  = useCallback((days) => loadDailyInner(usersRef.current, {}, days), [])
+  const handleReturnToday  = useCallback(() => loadDailyInner(usersRef.current, {}, 0), [])
+
+  const handleOnboardComplete = useCallback(async (usersArray) => {
+    identityManager.saveUsersArray(usersArray)
+    setOnboardOpen(false)
+    setSaveMessage('Welcome to Kairos — loading your personalised guidance.')
+    setTimeout(() => setSaveMessage(null), 4000)
+    await loadDailyInner(usersArray, {}, 0)
+  }, [])
 
   return {
-    // Core state
+    // State
     daily, status, tab, daysAhead, dateContext,
-    userData, primaryUser, users, feedbackAdj, profileStatus,
+    identity, primaryUser, users, profileStatus,
+    saveMessage,
     // DTOs
     ...dtos, diagnostics,
     // Modals
-    profileOpen, inviteOpen, insightsOpen, plannerOpen,
+    profileOpen, inviteOpen, insightsOpen, plannerOpen, onboardOpen,
     // Actions
     handleSaveUsers, handleFeedback, handleTabChange,
-    handleFetchFuture, handleReturnToday, loadDaily,
+    handleFetchFuture, handleReturnToday,
+    handleExportProfile, handleImportProfile, handleDeleteProfile,
+    handleOnboardComplete,
     // Modal toggles
     openProfile:   () => setProfileOpen(true),
     closeProfile:  () => setProfileOpen(false),
@@ -127,6 +171,7 @@ export function useBootstrap() {
     openInsights:  () => setInsightsOpen(true),
     closeInsights: () => { setInsightsOpen(false); setTab(TABS.TODAY) },
     openPlanner:   () => setPlannerOpen(true),
-    closePlanner:  () => { setPlannerOpen(false); setTab(TABS.TODAY) }
+    closePlanner:  () => { setPlannerOpen(false); setTab(TABS.TODAY) },
+    closeOnboard:  () => setOnboardOpen(false),
   }
 }

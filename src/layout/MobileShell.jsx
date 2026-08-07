@@ -24,7 +24,7 @@ export default function MobileShell({ bs, loading }) {
         onJournal={()  => bs.handleTabChange(TABS.JOURNAL)}
         onMore={bs.openProfile}
       />
-      {bs.profileOpen  && <ProfileModal  onClose={bs.closeProfile}  users={bs.users} onSave={bs.handleSaveUsers} />}
+      {bs.profileOpen  && <ProfileModal  onClose={bs.closeProfile}  users={bs.users} onSave={bs.handleSaveUsers} onExport={bs.handleExportProfile} onImport={bs.handleImportProfile} onDelete={bs.handleDeleteProfile} />}
       {bs.inviteOpen   && <InviteModal   onClose={bs.closeInvite} />}
       {bs.insightsOpen && <InsightsModal onClose={bs.closeInsights} userData={bs.userData} />}
       {bs.plannerOpen && bs.tab === TABS.PLANNER && (
