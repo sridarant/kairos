@@ -208,9 +208,8 @@ export default function DesktopShell({ bs, loading }) {
   function handleNav(tab) {
     if (tab === TABS.MORE)    { bs.openProfile();  return }
     if (tab === TABS.JOURNAL) { bs.openInsights(); return }
-    bs.handleTabChange(tab)
-    // On desktop, nothing is "opened" — the right panel changes
-    bs.closePlanner()
+    // On desktop the right panel changes based on tab — no modal to open/close
+    bs.setDesktopTab(tab)
   }
 
   return (

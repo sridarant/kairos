@@ -45,13 +45,21 @@ function uid() {
 
 function blankProfile() {
   return {
-    name:        '',
-    dob:         '',
-    birth_time:  '',
-    birth_place: '',
-    timezone:    (typeof Intl !== 'undefined'
+    name:            '',
+    dob:             '',
+    birth_time:      '',
+    place_of_birth:  '',    // canonical name e.g. "Chennai, Tamil Nadu, India"
+    timezone:        (typeof Intl !== 'undefined'
       ? Intl.DateTimeFormat().resolvedOptions().timeZone : '') || '',
-    gender:      null
+    gender:          null
+  }
+}
+
+function blankMember() {
+  return {
+    ...blankProfile(),
+    relationship: '',   // 'spouse', 'child', 'parent', 'sibling', 'other'
+    notes:        ''
   }
 }
 
@@ -87,6 +95,11 @@ function migrate(raw) {
 
   // Fill any fields added in later schema versions
   identity.profile  = { ...blankProfile(), ...identity.profile }
+  // Migrate legacy birth_place field to place_of_birth
+  if (identity.profile.birth_place && !identity.profile.place_of_birth) {
+    identity.profile.place_of_birth = identity.profile.birth_place
+    delete identity.profile.birth_place
+  }
   identity.family   = Array.isArray(identity.family) ? identity.family : []
   identity.prefs    = { theme:'dark', notifications:false, language:'en', ...identity.prefs }
   identity.appState = {
@@ -242,18 +255,20 @@ export class IdentityManager {
       profile: {
         ...blankProfile(),
         ...profileFields,
-        // Guard against undefined surviving JSON round-trips
-        name:       (profileFields.name       || '').trim(),
-        dob:        (profileFields.dob        || '').trim(),
-        birth_time: (profileFields.birth_time || '').trim(),
+        name:           (profileFields.name           || '').trim(),
+        dob:            (profileFields.dob            || '').trim(),
+        birth_time:     (profileFields.birth_time     || '').trim(),
+        place_of_birth: (profileFields.place_of_birth || '').trim(),
       },
-      family:     familyArray.map(m => ({
-        name:       (m.name       || '').trim(),
-        dob:        (m.dob        || '').trim(),
-        birth_time: (m.birth_time || '').trim(),
-        birth_place:(m.birth_place|| '').trim(),
-        timezone:   m.timezone || '',
-        gender:     m.gender   || null
+      family: familyArray.map(m => ({
+        ...blankMember(),
+        ...m,
+        name:           (m.name           || '').trim(),
+        dob:            (m.dob            || '').trim(),
+        birth_time:     (m.birth_time     || '').trim(),
+        place_of_birth: (m.place_of_birth || '').trim(),
+        relationship:   (m.relationship   || '').trim(),
+        notes:          (m.notes          || '').trim(),
       })),
       appState: {
         ...this._identity.appState,

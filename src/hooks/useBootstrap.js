@@ -165,6 +165,7 @@ export function useBootstrap() {
     closeInvite:  () => setInviteOpen(false),
     openInsights: () => setInsightsOpen(true),
     closeInsights:() => { setInsightsOpen(false); setTab(TABS.TODAY) },
+    setDesktopTab: (t) => setTab(t),   // desktop only — no modal state
     openPlanner:  () => setPlannerOpen(true),
     closePlanner: () => { setPlannerOpen(false); setTab(TABS.TODAY) },
     closeOnboard: () => setOnboardOpen(false)

@@ -1,16 +1,12 @@
 /**
- * OnboardingModal — First-run experience.
- * Step 1: Name. Step 2: Birth details. Step 3: Family (optional).
- * On complete: calls onComplete(profileFields, familyArray).
- * IdentityManager.saveProfile() is called by the hook, not here.
+ * OnboardingModal v30.3.2 — Full birth details capture.
+ * Includes: Name, DOB, Birth Time (smart input), Place of Birth.
+ * Family step: same fields + Relationship.
  */
 import { useState } from 'react'
-import {
-  PrimaryButton, SecondaryButton, FieldLabel, Caption
-} from './common/index.jsx'
-import {
-  Surface, Text, Status, Accent, Radius, Space, Pad, FontSize, FontWeight, Z
-} from '../styles/tokens/index.js'
+import BirthTimeInput from './common/BirthTimeInput.jsx'
+import { PrimaryButton, SecondaryButton, FieldLabel, Caption } from './common/index.jsx'
+import { Surface, Text, Status, Accent, Radius, Space, Pad, FontSize, FontWeight, Z } from '../styles/tokens/index.js'
 
 const STEPS = ['about', 'birth', 'family']
 
@@ -52,7 +48,7 @@ function StepAbout({ name, setName, onNext, onSkip }) {
         Let's start with your name.
       </p>
       <FieldLabel text="Your name" />
-      <input placeholder="e.g. Priya" value={name}
+      <input placeholder="e.g. Sridaran" value={name}
         onChange={e => setName(e.target.value)}
         onKeyDown={e => e.key==='Enter' && name.trim() && onNext()}
         style={{ ...inp(), marginBottom:Space['3xl'] }} autoFocus />
@@ -67,33 +63,40 @@ function StepAbout({ name, setName, onNext, onSkip }) {
   )
 }
 
-function StepBirth({ dob, setDob, birthTime, setBirthTime, onNext, onSkip }) {
+function StepBirth({ fields, set, onNext, onSkip }) {
   return (
     <div>
       <p style={{ fontSize:FontSize.Heading2, fontWeight:FontWeight.Bold, color:Text.Primary, marginBottom:Space.sm }}>
         Birth details
       </p>
       <p style={{ fontSize:FontSize.Body, color:Text.Secondary, lineHeight:1.6, marginBottom:Space['3xl'] }}>
-        Your birth date and time allow Kairos to calculate planetary positions.
+        Used to calculate planetary positions and personalise your guidance.
         Your data stays on this device only.
       </p>
       <div style={{ marginBottom:Space.xl }}>
         <FieldLabel text="Date of birth" />
-        <input placeholder="DD-MM-YYYY" value={dob}
-          onChange={e => setDob(formatDob(e.target.value))} style={inp()} />
+        <input placeholder="DD-MM-YYYY" value={fields.dob}
+          onChange={e => set('dob', formatDob(e.target.value))} style={inp()} />
         <p style={{ fontSize:FontSize.Badge, color:Text.Secondary, marginTop:Space.xs }}>
           Day-month-year, e.g. 20-10-1976
         </p>
       </div>
-      <div style={{ marginBottom:Space['3xl'] }}>
+      <div style={{ marginBottom:Space.xl }}>
         <FieldLabel text="Birth time (recommended)" />
-        <input placeholder="HH:MM" value={birthTime}
-          onChange={e => setBirthTime(e.target.value)} style={inp()} />
+        <BirthTimeInput value={fields.birth_time} onChange={v => set('birth_time', v)} placeholder="HHMM" />
         <p style={{ fontSize:FontSize.Badge, color:Text.Secondary, marginTop:Space.xs }}>
-          More accurate time → more accurate timing guidance
+          Type digits e.g. 1125 for 11:25
         </p>
       </div>
-      <PrimaryButton onClick={onNext} disabled={dob.length < 8} fullWidth>Continue →</PrimaryButton>
+      <div style={{ marginBottom:Space['3xl'] }}>
+        <FieldLabel text="Place of birth (recommended)" />
+        <input placeholder="e.g. Chennai, Tamil Nadu, India" value={fields.place_of_birth}
+          onChange={e => set('place_of_birth', e.target.value)} style={inp()} />
+        <p style={{ fontSize:FontSize.Badge, color:Text.Secondary, marginTop:Space.xs }}>
+          City, state/region, country
+        </p>
+      </div>
+      <PrimaryButton onClick={onNext} disabled={fields.dob.length < 8} fullWidth>Continue →</PrimaryButton>
       <div style={{ textAlign:'center', marginTop:Space.md }}>
         <button onClick={onSkip} style={{ background:'none', border:'none', color:Text.Secondary,
           fontSize:FontSize.Caption, cursor:'pointer', fontFamily:'inherit' }}>
@@ -104,14 +107,51 @@ function StepBirth({ dob, setDob, birthTime, setBirthTime, onNext, onSkip }) {
   )
 }
 
+const RELATIONSHIPS = ['Spouse / Partner','Child','Parent','Sibling','Other']
+
+function FamilyMemberForm({ draft, setDraft, onAdd, onCancel }) {
+  return (
+    <div style={{ background:Surface.Card, borderRadius:Radius.card, padding:Pad.card, marginBottom:Space.md }}>
+      {[
+        { label:'Name', field:'name', ph:'Name' },
+        { label:'Relationship', field:'relationship', type:'select' },
+        { label:'Date of birth', field:'dob', ph:'DD-MM-YYYY', fmt:true },
+        { label:'Place of birth', field:'place_of_birth', ph:'City, Country' },
+      ].map(({ label, field, ph, fmt, type }) => (
+        <div key={field} style={{ marginBottom:Space.md }}>
+          <FieldLabel text={label} />
+          {type === 'select' ? (
+            <select value={draft[field] || ''} onChange={e=>setDraft(d=>({...d,[field]:e.target.value}))}
+              style={{ ...inp(), appearance:'none' }}>
+              <option value="">— select —</option>
+              {RELATIONSHIPS.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          ) : (
+            <input value={draft[field] || ''} placeholder={ph} style={inp()}
+              onChange={e => setDraft(d=>({ ...d, [field]: fmt ? formatDob(e.target.value) : e.target.value }))} />
+          )}
+        </div>
+      ))}
+      <div style={{ marginBottom:Space.md }}>
+        <FieldLabel text="Birth time (optional)" />
+        <BirthTimeInput value={draft.birth_time||''} onChange={v=>setDraft(d=>({...d,birth_time:v}))} />
+      </div>
+      <div style={{ display:'flex', gap:Space.sm }}>
+        <SecondaryButton onClick={onCancel}>Cancel</SecondaryButton>
+        <PrimaryButton onClick={onAdd} disabled={!draft.name?.trim()}>Add</PrimaryButton>
+      </div>
+    </div>
+  )
+}
+
 function StepFamily({ family, setFamily, onComplete }) {
   const [adding, setAdding] = useState(false)
-  const [draft, setDraft]   = useState({ name:'', dob:'', birth_time:'' })
+  const [draft, setDraft]   = useState({ name:'', dob:'', birth_time:'', place_of_birth:'', relationship:'', notes:'' })
 
   function addMember() {
     if (!draft.name.trim()) return
     setFamily(prev => [...prev, { ...draft }])
-    setDraft({ name:'', dob:'', birth_time:'' })
+    setDraft({ name:'', dob:'', birth_time:'', place_of_birth:'', relationship:'', notes:'' })
     setAdding(false)
   }
 
@@ -121,45 +161,33 @@ function StepFamily({ family, setFamily, onComplete }) {
         Your family
       </p>
       <p style={{ fontSize:FontSize.Body, color:Text.Secondary, lineHeight:1.6, marginBottom:Space['3xl'] }}>
-        Kairos can show guidance for your whole family and suggest shared windows.
-        Optional — add family members later in Settings.
+        Kairos shows guidance for your whole family and suggests shared windows.
+        Add family members now or later in Settings.
       </p>
 
       {family.map((m, i) => (
         <div key={i} style={{ background:Surface.Card, borderRadius:Radius.card, padding:Pad.cardSm,
           marginBottom:Space.sm, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <span style={{ fontSize:FontSize.Body, color:Text.Primary }}>{m.name}</span>
+          <div>
+            <p style={{ fontSize:FontSize.Body, color:Text.Primary, fontWeight:FontWeight.Bold }}>{m.name}</p>
+            {m.relationship && <p style={{ fontSize:FontSize.Caption, color:Text.Secondary }}>{m.relationship}</p>}
+          </div>
           <button onClick={() => setFamily(f => f.filter((_,j)=>j!==i))} style={{
-            background:'none', border:'none', color:Status.Danger, cursor:'pointer',
-            fontSize:FontSize.Body, fontFamily:'inherit' }}>✕</button>
+            background:'none', border:'none', color:Status.Danger,
+            cursor:'pointer', fontSize:FontSize.Body, fontFamily:'inherit' }}>✕</button>
         </div>
       ))}
 
-      {adding ? (
-        <div style={{ background:Surface.Card, borderRadius:Radius.card, padding:Pad.card, marginBottom:Space.xl }}>
-          <div style={{ marginBottom:Space.md }}>
-            <FieldLabel text="Name" />
-            <input value={draft.name} onChange={e=>setDraft(d=>({...d,name:e.target.value}))}
-              placeholder="Name" style={inp()} />
-          </div>
-          <div style={{ marginBottom:Space.md }}>
-            <FieldLabel text="Date of birth (optional)" />
-            <input value={draft.dob} onChange={e=>setDraft(d=>({...d,dob:formatDob(e.target.value)}))}
-              placeholder="DD-MM-YYYY" style={inp()} />
-          </div>
-          <div style={{ display:'flex', gap:Space.sm }}>
-            <SecondaryButton onClick={() => setAdding(false)}>Cancel</SecondaryButton>
-            <PrimaryButton onClick={addMember} disabled={!draft.name.trim()}>Add</PrimaryButton>
-          </div>
-        </div>
-      ) : family.length < 3 && (
-        <button onClick={() => setAdding(true)} style={{ width:'100%', background:Surface.Card,
-          border:`1px dashed ${Surface.Line}`, borderRadius:Radius.card, padding:Pad.cardSm,
-          color:Text.Secondary, fontSize:FontSize.Body, cursor:'pointer', fontFamily:'inherit',
-          marginBottom:Space.xl }}>
-          + Add family member
-        </button>
-      )}
+      {adding
+        ? <FamilyMemberForm draft={draft} setDraft={setDraft} onAdd={addMember} onCancel={() => setAdding(false)} />
+        : family.length < 5 && (
+          <button onClick={() => setAdding(true)} style={{ width:'100%', background:Surface.Card,
+            border:`1px dashed ${Surface.Line}`, borderRadius:Radius.card, padding:Pad.cardSm,
+            color:Text.Secondary, fontSize:FontSize.Body, cursor:'pointer', fontFamily:'inherit',
+            marginBottom:Space.xl }}>
+            + Add family member
+          </button>
+        )}
 
       {!adding && (
         <PrimaryButton onClick={onComplete} fullWidth>
@@ -171,17 +199,15 @@ function StepFamily({ family, setFamily, onComplete }) {
 }
 
 export default function OnboardingModal({ onComplete, onSkip }) {
-  const [step,      setStep]      = useState('about')
-  const [name,      setName]      = useState('')
-  const [dob,       setDob]       = useState('')
-  const [birthTime, setBirthTime] = useState('')
-  const [family,    setFamily]    = useState([])
+  const [step,   setStep]   = useState('about')
+  const [name,   setName]   = useState('')
+  const [birth,  setBirth]  = useState({ dob:'', birth_time:'', place_of_birth:'' })
+  const [family, setFamily] = useState([])
+
+  function setBirthField(field, val) { setBirth(b => ({ ...b, [field]: val })) }
 
   function handleComplete() {
-    onComplete(
-      { name: name.trim(), dob: dob.trim(), birth_time: birthTime.trim() },
-      family
-    )
+    onComplete({ name: name.trim(), ...birth }, family)
   }
 
   return (
@@ -200,8 +226,7 @@ export default function OnboardingModal({ onComplete, onSkip }) {
               onNext={() => setStep('birth')} onSkip={onSkip} />
           )}
           {step === 'birth' && (
-            <StepBirth dob={dob} setDob={setDob}
-              birthTime={birthTime} setBirthTime={setBirthTime}
+            <StepBirth fields={birth} set={setBirthField}
               onNext={() => setStep('family')} onSkip={() => setStep('family')} />
           )}
           {step === 'family' && (

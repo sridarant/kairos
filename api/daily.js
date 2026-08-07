@@ -39,7 +39,12 @@ function parseUser(u) {
   const year  = parseInt(parts[2] || '1990', 10)
   const [bh = 6, bm = 0] = (u.birth_time || '06:00').split(':').map(Number)
   if (isNaN(day) || isNaN(month) || isNaN(year)) return null
-  return { name: String(u.name).slice(0, 50), day, month, year, bh, bm }
+  return {
+    name:           String(u.name).slice(0, 50),
+    day, month, year, bh, bm,
+    place_of_birth: String(u.place_of_birth || '').slice(0, 100),
+    timezone:       String(u.timezone || '').slice(0, 50)
+  }
 }
 
 // ─── Member assembly ──────────────────────────────────────────────────────────
