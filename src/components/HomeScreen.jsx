@@ -84,7 +84,8 @@ function LoadingSkeleton() {
 export default function HomeScreen({
   brief, recommendationPackages, timeline, weeklyPlan, opportunities, diagnostics,
   daily, loading, status, primaryUser, profileStatus, dateContext,
-  onProfileOpen, onInvite, onFamilyPlan, onFetchFuture, onReturnToday, onFeedback
+  onProfileOpen, onInvite, onFamilyPlan, onFetchFuture, onReturnToday, onFeedback,
+  showTimeline = true
 }) {
   const [showInstall, setShowInstall] = useState(false)
   useEffect(() => {
@@ -119,7 +120,7 @@ export default function HomeScreen({
           <UpcomingSection opportunities={opportunities} weeklyPlan={weeklyPlan} onFetchFuture={onFetchFuture} />
           <ThisWeekSection weeklyPlan={weeklyPlan} onFetchFuture={onFetchFuture} />
           <Divider />
-          <TimelineSection timeline={timeline} />
+          {showTimeline && <TimelineSection timeline={timeline} />}
           <FamilyBriefSection brief={brief} daily={daily} onFamilyPlan={onFamilyPlan} />
           <TomorrowSection brief={brief} onFetchFuture={onFetchFuture} />
           <div style={{ textAlign:'center', padding:`${Space.xl}px 0 ${Space.sm}px`,

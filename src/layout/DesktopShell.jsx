@@ -18,7 +18,6 @@ import FamilyScreen   from '../components/FamilyScreen.jsx'
 import InsightsScreen from '../components/InsightsScreen.jsx'
 import ProfileModal   from '../components/ProfileModal.jsx'
 import InviteModal    from '../components/InviteModal.jsx'
-import { InsightsModal as _unused } from '../components/InsightsModal.jsx'  // kept for compat
 import TimelineSection  from '../components/pages/today/TimelineSection.jsx'
 import TomorrowSection  from '../components/pages/today/TomorrowSection.jsx'
 import UpcomingSection  from '../components/pages/today/UpcomingSection.jsx'
@@ -174,7 +173,7 @@ export default function DesktopShell({ bs }) {
             dateContext={bs.dateContext} diagnostics={bs.diagnostics}
             onProfileOpen={bs.openProfile} onInvite={bs.openInvite}
             onFetchFuture={bs.handleFetchFuture} onReturnToday={bs.handleReturnToday}
-            onFeedback={bs.handleFeedback}
+            onFeedback={bs.handleFeedback} showTimeline={false}
           />
         )}
 

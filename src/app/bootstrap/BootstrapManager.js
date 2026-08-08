@@ -73,7 +73,7 @@ export function buildApplicationDTOs(daily, feedbackHistory = []) {
   const ranked  = rankRecommendations(buildDailyPackages(primary, null, daily.family_alignment), prefs)
   return {
     brief:                  adaptDailyBrief(buildMorningBrief(daily, primary), daily),
-    recommendationPackages: adaptRecommendations(ranked),
+    recommendationPackages: adaptRecommendations(ranked, primary?.stars || daily?.stars),
     timeline:               adaptTimeline(primary?.timeline),
     weeklyPlan:             adaptWeeklyPlan(buildWeeklyPlan(daily.week_plan)),
     opportunities:          adaptOpportunities(buildUpcomingOpportunities(daily.week_plan))
