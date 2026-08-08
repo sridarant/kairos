@@ -26,7 +26,7 @@ export default function MobileShell({ bs, loading }) {
       />
       {bs.profileOpen  && <ProfileModal  onClose={bs.closeProfile}  identity={bs.identity} onSave={bs.handleSaveProfile} onExport={bs.handleExport} onImport={bs.handleImport} onDelete={bs.handleDeleteProfile} />}
       {bs.inviteOpen   && <InviteModal   onClose={bs.closeInvite} />}
-      {bs.insightsOpen && <InsightsModal onClose={bs.closeInsights} identity={bs.identity} />}
+      {bs.insightsOpen && <InsightsModal onClose={bs.closeInsights} identity={bs.identity} onAddEntry={bs.handleAddJournalEntry} />}
       {bs.plannerOpen && bs.tab === TABS.PLANNER && (
         <PlannerScreen weeklyPlan={bs.weeklyPlan} opportunities={bs.opportunities}
           daily={bs.daily} dateContext={bs.dateContext}

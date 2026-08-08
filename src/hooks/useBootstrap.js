@@ -105,6 +105,15 @@ export function useBootstrap() {
     identityManager.addFeedback(category, action, outcome)
   }, [])
 
+  /** Record a journal outcome entry (WS10) */
+  const handleAddJournalEntry = useCallback((entry) => {
+    identityManager.addFeedback(
+      entry.category || 'general',
+      entry.note     || 'outcome recorded',
+      entry.outcome  || 'neutral'
+    )
+  }, [])
+
   const handleExport = useCallback(() => {
     try {
       const json = identityManager.export()
@@ -155,7 +164,7 @@ export function useBootstrap() {
     profileOpen, inviteOpen, insightsOpen, plannerOpen, onboardOpen,
     // Actions
     handleSaveProfile, handleOnboardComplete,
-    handleFeedback, handleTabChange,
+    handleFeedback, handleAddJournalEntry, handleTabChange,
     handleFetchFuture, handleReturnToday,
     handleExport, handleImport, handleDeleteProfile,
     // Modal toggles

@@ -136,7 +136,7 @@ export default function TabletShell({ bs, loading }) {
 
       {bs.profileOpen  && <ProfileModal  onClose={bs.closeProfile}  identity={bs.identity} onSave={bs.handleSaveProfile} onExport={bs.handleExport} onImport={bs.handleImport} onDelete={bs.handleDeleteProfile} />}
       {bs.inviteOpen   && <InviteModal   onClose={bs.closeInvite} />}
-      {bs.insightsOpen && <InsightsModal onClose={bs.closeInsights} identity={bs.identity} />}
+      {bs.insightsOpen && <InsightsModal onClose={bs.closeInsights} identity={bs.identity} onAddEntry={bs.handleAddJournalEntry} />}
     </div>
   )
 }
