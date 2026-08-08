@@ -18,7 +18,8 @@ import { buildWeeklyPlan, buildUpcomingOpportunities } from '../../../lib/recomm
 import { buildMorningBrief }                           from '../../../lib/dailyBrief/index.js'
 import {
   adaptRecommendations, adaptDailyBrief, adaptTimeline,
-  adaptWeeklyPlan, adaptOpportunities, buildDiagnostics
+  adaptWeeklyPlan, adaptOpportunities, buildDiagnostics,
+  adaptMembers
 } from '../../../lib/adapters/index.js'
 
 // ─── Date context ─────────────────────────────────────────────────────────────
@@ -66,7 +67,7 @@ export async function fetchDailyAPI(users, daysAhead = 0) {
 
 export function buildApplicationDTOs(daily, feedbackHistory = []) {
   if (!daily) return {
-    brief: null, recommendationPackages: [], timeline: [], weeklyPlan: null, opportunities: []
+    brief: null, recommendationPackages: [], timeline: [], weeklyPlan: null, opportunities: [], members: []
   }
   const primary = daily.members?.[0] || null
   const prefs   = computeFeedbackPrefs(feedbackHistory)
@@ -74,6 +75,7 @@ export function buildApplicationDTOs(daily, feedbackHistory = []) {
   return {
     brief:                  adaptDailyBrief(buildMorningBrief(daily, primary), daily),
     recommendationPackages: adaptRecommendations(ranked, primary?.stars || daily?.stars),
+    members:                adaptMembers(daily.members),
     timeline:               adaptTimeline(primary?.timeline),
     weeklyPlan:             adaptWeeklyPlan(buildWeeklyPlan(daily.week_plan)),
     opportunities:          adaptOpportunities(buildUpcomingOpportunities(daily.week_plan))

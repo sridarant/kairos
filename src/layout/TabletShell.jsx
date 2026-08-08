@@ -104,7 +104,7 @@ export default function TabletShell({ bs }) {
         )}
         {activeTab === TABS.FAMILY && (
           <FamilyScreen
-            brief={bs.brief} daily={bs.daily} weeklyPlan={bs.weeklyPlan}
+            brief={bs.brief} daily={bs.daily} members={bs.members} weeklyPlan={bs.weeklyPlan}
             dateContext={bs.dateContext} identity={bs.identity}
             onFetchFuture={bs.handleFetchFuture}
           />

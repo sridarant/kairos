@@ -1,44 +1,41 @@
 # Known Limitations
 
-## Astronomical Precision
+## Horizon Fetch in Planner
 
-The ephemeris uses a simplified planetary model accurate to ±1° for the major planets within 2026–2030.
-For higher precision, replace `lib/astronomy/ephemeris.js` with Swiss Ephemeris (requires a C extension).
+`PlannerScreen` calls `/api/daily` directly for each future day in the 7/14-day horizon.
+These raw API responses use snake_case fields (`golden_window`, `avoid_window`) because
+they bypass the adapter layer. This is a documented exception: PlannerScreen uses these
+fields internally only and does not pass them to child components.
 
-## Birth Time Precision
+**Planned fix (v31):** Add a `PlannerHorizonAdapter` so all data is normalised before use.
+
+## Ephemeris Precision
+
+The ephemeris is accurate to ±1° for major planets within 2026–2030.
+For higher precision, replace `lib/astronomy/ephemeris.js` with Swiss Ephemeris.
+
+## Birth Time Default
 
 Without exact birth time, Lagna (ascendant) defaults to sunrise (~06:00).
-Recommendations are most accurate with birth time to within 15 minutes.
+Recommendations are most accurate with birth time within 15 minutes.
 
-## Family Alignment
+## Family Alignment Scoring
 
-Family alignment uses a simplified scoring model. It is most useful as a directional guide, not a precise compatibility measurement.
+Family alignment uses a simplified scoring model. It reflects general directional harmony,
+not a precise compatibility measurement.
 
-## Weekly Plan
+## Weekly Plan Caching
 
-The week plan is generated server-side for 7 days from today.
-It does not persist and regenerates on each API call.
-A caching layer (e.g. Supabase + Redis) would improve performance for returning users.
+The week plan regenerates on every API call. A caching layer would improve performance.
 
 ## Offline Support
 
-The PWA service worker precaches static assets.
-The `/api/daily` endpoint requires a network connection.
-Offline mode shows the last cached state (if any) but cannot generate fresh guidance.
+The PWA service worker precaches static assets. `/api/daily` requires a network connection.
+Offline mode shows the loading state indefinitely.
 
-## Monthly View
+## Recommendation Differentiation
 
-A monthly planner is not yet implemented. The week plan covers 7 days.
-See ROADMAP.md for planned v30 features.
-
-## Language Enrichment
-
-`/api/explain.js` uses Claude to enrich recommendation language.
-It is not called by the main daily flow in v29 — the engine generates all text.
-Integration planned for v30.
-
-## TypeScript
-
-The project uses JSDoc for type documentation but not TypeScript.
-This was a deliberate decision (see ADR-003) to reduce build complexity.
-Migration to TypeScript is possible without architecture changes.
+On days with uniform strong or weak planetary support, multiple categories may display
+similar star ratings. The capping mechanism (category stars ≤ overall day stars + 1)
+prevents misleading 5-star labels on 2-star days, but does not guarantee differentiation
+when the reasoning engine legitimately assigns the same quality to all categories.

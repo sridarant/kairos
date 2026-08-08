@@ -32,6 +32,7 @@ export default function MobileShell({ bs }) {
           onProfileOpen={bs.openProfile} onInvite={bs.openInvite}
           onFetchFuture={bs.handleFetchFuture} onReturnToday={bs.handleReturnToday}
           onFeedback={bs.handleFeedback}
+          onFamilyPlan={() => bs.setTab('family')}
         />
       )}
 
@@ -46,7 +47,7 @@ export default function MobileShell({ bs }) {
 
       {tab === TABS.FAMILY && (
         <FamilyScreen
-          brief={bs.brief} daily={bs.daily} weeklyPlan={bs.weeklyPlan}
+          brief={bs.brief} daily={bs.daily} members={bs.members} weeklyPlan={bs.weeklyPlan}
           dateContext={bs.dateContext} identity={bs.identity}
           onFetchFuture={bs.handleFetchFuture}
         />

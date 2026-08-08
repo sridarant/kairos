@@ -51,7 +51,7 @@ function MemberSwitcher({ members, selected, onSelect }) {
 // ─── Member compact cards (Everyone view) ─────────────────────────────────────
 
 function MemberCompactCard({ member, idx, onSelect }) {
-  const win = member.golden_window
+  const win = member.goldenWindow
   return (
     <div onClick={() => onSelect(idx)} style={{
       background:Surface.Card, borderRadius:Radius.card, padding:Pad.card,
@@ -228,18 +228,18 @@ function IndividualDay({ member, identityMember, dateContext }) {
           </div>
         )}
 
-        {member.golden_window && (
+        {member.goldenWindow && (
           <div style={{ background:`${Accent}11`, borderRadius:Radius.lg, padding:'9px 12px', marginBottom:Space.sm }}>
             <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.07em',
               color:Text.Secondary, fontWeight:FontWeight.Medium, marginBottom:Space.xs }}>Best Window</p>
-            <p style={{ fontSize:FontSize.Heading2, fontWeight:FontWeight.Heavy, color:Accent }}>{member.golden_window}</p>
+            <p style={{ fontSize:FontSize.Heading2, fontWeight:FontWeight.Heavy, color:Accent }}>{member.goldenWindow}</p>
           </div>
         )}
 
-        {member.avoid_window && (
+        {member.avoidWindow && (
           <div style={{ background:'rgba(248,113,113,0.07)', borderRadius:Radius.lg, padding:'8px 12px' }}>
             <p style={{ fontSize:FontSize.Badge, color:Status.Danger, fontWeight:FontWeight.Bold }}>
-              ⚠ Avoid: {member.avoid_window}
+              ⚠ Avoid: {member.avoidWindow}
             </p>
           </div>
         )}
@@ -315,11 +315,11 @@ function IndividualDay({ member, identityMember, dateContext }) {
 // ─── Main export ─────────────────────────────────────────────────────────────
 
 export default function FamilyScreen({
-  brief, daily, weeklyPlan, dateContext, identity, onFetchFuture
+  brief, daily, members, weeklyPlan, dateContext, identity, onFetchFuture
 }) {
   const [selected, setSelected] = useState('everyone')
 
-  const apiMembers    = daily?.members || []
+  const apiMembers    = members || []
   const identityFamily = identity?.family || []
   const hasFamilyMembers = apiMembers.length > 1
 

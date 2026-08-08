@@ -56,6 +56,7 @@ function HorizonDay({ dayData, onSelect }) {
   const ctx  = buildDateContext(dayData.daysAhead)
   const prim = dayData.members?.[0] || dayData
   const stars = prim.stars || dayData.stars || 3
+  // golden_window / avoid_window: raw from /api/daily (horizonFetch bypasses adapter)
   const win   = prim.golden_window || dayData.golden_window
 
   return (

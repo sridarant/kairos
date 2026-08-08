@@ -11,11 +11,11 @@ function signalLabel(pkg) {
   const stars = pkg.stars || 3
   const q     = pkg.quality || 'neutral'
   if (q === 'caution' || stars <= 1) return { text:'Be mindful',      color: Status.Danger }
-  if (stars >= 5)                    return { text:'Exceptional',      color:'#4ade80' }
-  if (stars >= 4 && q==='supportive')return { text:'Strong opportunity', color:'#4ade80' }
+  if (stars >= 5)                    return { text:'Exceptional',      color:Status.Success }
+  if (stars >= 4 && q==='supportive')return { text:'Strong opportunity', color:Status.Success }
   if (stars >= 4)                    return { text:'Favourable',       color: Accent }
   if (stars >= 3)                    return { text:'Worth considering', color: Text.Secondary }
-  if (q === 'mixed')                 return { text:'Mixed signals',    color:'#fb923c' }
+  if (q === 'mixed')                 return { text:'Mixed signals',    color:Status.Caution }
   return                               { text:'Consider',              color: Text.Secondary }
 }
 

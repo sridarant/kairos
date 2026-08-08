@@ -30,7 +30,7 @@ export default function DateHeader({ dateContext, primaryUser, profileStatus, on
             </span>
           </div>
           {/* Who line */}
-          <p style={{ fontSize: FontSize.Badge, color: isDemo ? '#f87171' : Text.Secondary, marginTop:2 }}>
+          <p style={{ fontSize: FontSize.Badge, color: isDemo ? Status.Danger : Text.Secondary, marginTop:2 }}>
             {isDemo ? '⚠ ' : ''}{whoLabel}
           </p>
         </div>

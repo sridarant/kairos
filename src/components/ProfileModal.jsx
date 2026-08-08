@@ -34,7 +34,7 @@ function ProfileHealth({ profile, family }) {
     { label:'Place of birth',ok: !!profile.place_of_birth?.trim() },
   ]
   const score = checks.filter(c=>c.ok).length
-  const color = score >= 4 ? '#4ade80' : score >= 2 ? '#facc15' : '#f87171'
+  const color = score >= 4 ? Status.Success : score >= 2 ? Accent : Status.Danger
   return (
     <div style={{ background:Surface.Card, borderRadius:Radius.lg, padding:Pad.cardSm, marginBottom:Space.xl }}>
       <p style={{ fontSize:FontSize.Caption, color:Text.Secondary, marginBottom:Space.sm }}>
@@ -47,7 +47,7 @@ function ProfileHealth({ profile, family }) {
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:Space.xs }}>
         {checks.map((c,i) => (
-          <p key={i} style={{ fontSize:FontSize.Badge, color:c.ok ? '#4ade80' : Text.Secondary }}>
+          <p key={i} style={{ fontSize:FontSize.Badge, color:c.ok ? Status.Success : Text.Secondary }}>
             {c.ok ? '✓' : '○'} {c.label}
           </p>
         ))}
