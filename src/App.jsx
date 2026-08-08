@@ -1,11 +1,7 @@
-/**
- * App.jsx v30.3.2 — Shell only.
- * Identity loaded synchronously via IdentityManager before first render.
- */
-import { useBootstrap } from './hooks/useBootstrap.js'
-import AppShell         from './layout/AppShell.jsx'
-import OnboardingModal  from './components/OnboardingModal.jsx'
-import { ASYNC_STATE }  from './constants/index.js'
+import { useBootstrap }    from './hooks/useBootstrap.js'
+import AppShell            from './layout/AppShell.jsx'
+import OnboardingModal     from './components/OnboardingModal.jsx'
+import { ASYNC_STATE }     from './constants/index.js'
 import { Surface, Accent, Radius, Space, FontSize, FontWeight, Z } from './styles/tokens/index.js'
 
 function SaveToast({ message }) {
@@ -25,11 +21,9 @@ export default function App() {
   const bs = useBootstrap()
   return (
     <>
-      <AppShell bs={bs} loading={bs.status === ASYNC_STATE.LOADING} />
+      <AppShell bs={bs} />
       {bs.onboardOpen && (
-        <OnboardingModal
-          onComplete={bs.handleOnboardComplete}
-          onSkip={bs.closeOnboard} />
+        <OnboardingModal onComplete={bs.handleOnboardComplete} onSkip={bs.closeOnboard} />
       )}
       <SaveToast message={bs.saveMessage} />
     </>
