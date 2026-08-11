@@ -51,10 +51,20 @@ export function buildDateContext(daysAhead = 0) {
 // ─── API ──────────────────────────────────────────────────────────────────────
 
 export async function fetchDailyAPI(users, daysAhead = 0) {
+  // P0-06: Send client-local calculationDate so server uses correct date
+  // regardless of server timezone. Format: 'YYYY-MM-DD' in local time.
+  const now = new Date()
+  const base = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  if (daysAhead > 0) base.setDate(base.getDate() + daysAhead)
+  const yyyy = base.getFullYear()
+  const mm   = String(base.getMonth() + 1).padStart(2, '0')
+  const dd   = String(base.getDate()).padStart(2, '0')
+  const calculationDate = `${yyyy}-${mm}-${dd}`
+
   const res = await fetch('/api/daily', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ users: users || [], daysAhead })
+    body:    JSON.stringify({ users: users || [], daysAhead, calculationDate })
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))

@@ -10,6 +10,7 @@
  */
 
 import { getDailyAstronomy, getBirthChart, getBirthChartFromParts } from '../lib/astronomy/index.js'
+import { resolveBirthLocation, locationIsPersonalised } from '../lib/astronomy/birthLocation.js'
 import { buildAstroContext }                from '../lib/astrology/index.js'
 import { buildDecisionObject, buildFamilyDecisionObject } from '../lib/decision/engine.js'
 
@@ -49,21 +50,29 @@ function parseUser(u) {
 
 // ─── Member assembly ──────────────────────────────────────────────────────────
 
-function buildMember(name, decisionObj) {
+function buildMember(name, decisionObj, location = null) {
   const d = decisionObj
   return {
     name,
-    decision:      d.decision,
-    confidence:    d.confidence,
-    stars:         d.stars,
-    focus:         d.focus,
-    golden_window: d.goldenWindow,
-    avoid_window:  d.avoidWindow,
-    summary:       d.summary,
+    decision:        d.decision,
+    confidence:      d.confidence,
+    confidenceScore: d.confidenceScore,
+    stars:           d.stars,
+    suitabilityScore:d.suitabilityScore,
+    suitabilityTier: d.suitabilityTier,
+    focus:           d.focus,
+    golden_window:   d.goldenWindow,
+    avoid_window:    d.avoidWindow,
+    summary:         d.summary,
     recommendations: d.recommendations || { top: [], rest: [] },
-    timeline:      d.timeline || [],
-    dasha:         d.dasha || null,
-    yoga:          d.yoga  || null
+    timeline:        d.timeline || [],
+    dasha:           d.dasha || null,
+    yoga:            d.yoga  || null,
+    // P0-05: location precision status so UI/engine can flag limited personalisation
+    locationStatus:  location?.status || 'unresolved',
+    locationSource:  location?.source || 'default',
+    // P0-07: scoredSlots passed through for family overlap calculation
+    scoredSlots:     d.scoredSlots || []
   }
 }
 
@@ -92,15 +101,19 @@ function buildWeekPlan(targetDate, birthChart, userDob, primarySeed) {
       const label    = d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })
       plan.push({
         label,
-        date:       d.toISOString().slice(0, 10),
-        days_ahead: offset,
-        stars:      dayDec.stars,
-        // P0-03 fix: use suitabilityScore (rawScore-based) not confidenceScore
-        // rawScore is the golden slot composite score — a genuine suitability measure.
-        // Normalise 0-9 range to 0-100 for compatibility with downstream sort.
-        confidence: Math.round(Math.max(0, Math.min(100, (dayDec.rawScore + 4) / 13 * 100))),
-        summary:    dayDec.focus || 'Balanced day',
-        theme:      dayDec.focus || null
+        date:            d.toISOString().slice(0, 10),
+        days_ahead:      offset,
+        // P0-01/P0-03 canonical suitability fields (not confidence)
+        stars:           dayDec.stars,
+        suitabilityScore:dayDec.suitabilityScore,
+        suitabilityTier: dayDec.suitabilityTier,
+        confidenceScore: dayDec.confidenceScore,
+        confidence:      dayDec.confidence,
+        decision:        dayDec.decision,
+        golden_window:   dayDec.goldenWindow,
+        avoid_window:    dayDec.avoidWindow,
+        summary:         dayDec.focus || 'Balanced day',
+        theme:           dayDec.focus || null
       })
     } catch {
       // Skip days that fail to compute rather than aborting the whole response
@@ -118,10 +131,12 @@ function buildResponse(targetDate, users, feedbackAdj) {
 
   const members = userModels.map((u, idx) => {
     // P0-NEW-01 fix: use getBirthChartFromParts with numeric args (getBirthChart needs a string)
-    const chart  = getBirthChartFromParts(u.day, u.month, u.year, u.bh, u.bm)
+    // P0-05 fix: resolve birth location to canonical lat/lon with explicit precision status
+    const location = resolveBirthLocation(u.place_of_birth, u.timezone)
+    const chart  = getBirthChartFromParts(u.day, u.month, u.year, u.bh, u.bm, location.lat)
     const ctx    = buildAstroContext(astroData, chart, feedbackAdj, primarySeed + idx)
     const dec    = buildDecisionObject(ctx, primarySeed + idx, 0)
-    return buildMember(u.name, dec)
+    return buildMember(u.name, dec, location)
   })
 
   // Fallback primary member when no users are configured
@@ -132,13 +147,17 @@ function buildResponse(targetDate, users, feedbackAdj) {
   }
 
   const familyAlignment = members.length > 1
-    ? buildFamilyDecisionObject(members.map(m => ({ ...m, goldenWindow: m.golden_window, avoidWindow: m.avoid_window })))
+    ? buildFamilyDecisionObject(members.map(m => ({ ...m, goldenWindow: m.golden_window, avoidWindow: m.avoid_window, scoredSlots: m.scoredSlots || [] })))
     : null
 
   // P0-04 fix: pass primary user's birth chart to weekly plan calculation
+  // P0-05 fix: also resolve primary user's location for accurate lagna
+  const primaryLocation = userModels[0]
+    ? resolveBirthLocation(userModels[0].place_of_birth, userModels[0].timezone)
+    : null
   const primaryChart  = userModels[0] ? getBirthChartFromParts(
     userModels[0].day, userModels[0].month, userModels[0].year,
-    userModels[0].bh, userModels[0].bm
+    userModels[0].bh, userModels[0].bm, primaryLocation?.lat
   ) : null
   const primaryDob    = userModels[0] ? `${userModels[0].day}-${userModels[0].month}-${userModels[0].year}` : null
   const weekPlan = buildWeekPlan(targetDate, primaryChart, primaryDob, primarySeed)
@@ -182,8 +201,21 @@ export default async function handler(req, res) {
 
   try {
     const { daysAhead } = validation
-    const targetDate    = new Date()
-    if (daysAhead > 0) targetDate.setDate(targetDate.getDate() + daysAhead)
+    // P0-06 fix: use client-provided calculationDate if available.
+    // This prevents server timezone from determining user-facing daily calculations.
+    // The client should pass the date as YYYY-MM-DD in the user's local timezone.
+    // If not provided, fall back to server Date (documented limitation).
+    let targetDate
+    const clientDate = req.body.calculationDate   // expected: 'YYYY-MM-DD'
+    if (clientDate && /^\d{4}-\d{2}-\d{2}$/.test(clientDate)) {
+      // Parse as UTC midnight + daysAhead; astronomically equivalent for daily calc
+      targetDate = new Date(clientDate + 'T00:00:00.000Z')
+      if (daysAhead > 0) targetDate.setUTCDate(targetDate.getUTCDate() + daysAhead)
+    } else {
+      // Fallback: server local time (documented: may differ from user's local date near midnight)
+      targetDate = new Date()
+      if (daysAhead > 0) targetDate.setDate(targetDate.getDate() + daysAhead)
+    }
 
     const response = buildResponse(targetDate, req.body.users || [], req.body.feedbackAdj || null)
     return res.status(200).json(response)
