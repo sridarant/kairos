@@ -114,7 +114,8 @@ function buildWeekPlan(targetDate, birthChart, userDob, primarySeed) {
       const dayAstro = getDailyAstronomy(d)
       // P0-04 fix: pass birthChart so natal chart is used for future days
       // P0-03 fix: pass correct offset as daysAhead (was incorrectly primarySeed)
-      const dayCtx   = buildAstroContext(dayAstro, birthChart, userDob, offset)
+      // P0-5/P0-6: pass userDob and the specific future date as targetDate
+      const dayCtx   = buildAstroContext(dayAstro, birthChart, userDob, offset, d)
       const dayDec   = buildDecisionObject(dayCtx, primarySeed, offset)
       const label    = d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })
       plan.push({
@@ -148,21 +149,28 @@ function buildResponse(targetDate, users, feedbackAdj) {
   const primarySeed = userModels[0] ? hashUser(userModels[0]) : 0
 
   const members = userModels.map((u, idx) => {
-    // P0-NEW-01 fix: use getBirthChartFromParts with numeric args (getBirthChart needs a string)
-    // P0-05 fix: resolve birth location to canonical lat/lon with explicit precision status
-    // Constitution §9: do not use chart if birth date is missing/invalid
+    // P0-NEW-01: use getBirthChartFromParts with numeric args
+    // P0-1/P0-2/P0-3: resolve birth location (lat, lon, timezone) for correct Lagna+UTC
+    // Constitution §9: skip chart if DOB is missing
     const location = resolveBirthLocation(u.place_of_birth, u.timezone)
     const chart  = u.hasDob
-      ? getBirthChartFromParts(u.day, u.month, u.year, u.bh, u.bm, location.lat)
-      : null  // explicit null — no silent default birth date
-    const ctx    = buildAstroContext(astroData, chart, feedbackAdj, primarySeed + idx)
+      ? getBirthChartFromParts(
+          u.day, u.month, u.year, u.bh, u.bm,
+          location.lat,  // P0-1: real latitude
+          location.lon,  // P0-1: real longitude (was hardcoded 78°E before)
+          location.tz    // P0-2: real timezone for UTC conversion
+        )
+      : null  // explicit null — no silent default
+    // P0-5 fix: pass actual userDob string (not feedbackAdj) so Dasha gets the real DOB
+    const userDobStr = u.hasDob ? `${u.day}-${u.month}-${u.year}` : null
+    const ctx    = buildAstroContext(astroData, chart, userDobStr, primarySeed + idx, targetDate)
     const dec    = buildDecisionObject(ctx, primarySeed + idx, 0)
     return buildMember(u.name, dec, location)
   })
 
   // Fallback primary member when no users are configured
   if (members.length === 0) {
-    const ctx = buildAstroContext(astroData, null, feedbackAdj, 0)
+    const ctx = buildAstroContext(astroData, null, null, 0, targetDate)
     const dec = buildDecisionObject(ctx, 0, 0)
     members.push(buildMember('You', dec))
   }
@@ -179,7 +187,10 @@ function buildResponse(targetDate, users, feedbackAdj) {
     : null
   const primaryChart  = (userModels[0]?.hasDob) ? getBirthChartFromParts(
     userModels[0].day, userModels[0].month, userModels[0].year,
-    userModels[0].bh, userModels[0].bm, primaryLocation?.lat
+    userModels[0].bh, userModels[0].bm,
+    primaryLocation?.lat,
+    primaryLocation?.lon,  // P0-1: pass longitude to weekly plan chart too
+    primaryLocation?.tz    // P0-2: pass timezone for UTC conversion
   ) : null
   const primaryDob    = userModels[0] ? `${userModels[0].day}-${userModels[0].month}-${userModels[0].year}` : null
   const weekPlan = buildWeekPlan(targetDate, primaryChart, primaryDob, primarySeed)

@@ -259,7 +259,9 @@ export class IdentityManager {
         name:           (profileFields.name           || '').trim(),
         dob:            (profileFields.dob            || '').trim(),
         birth_time:     (profileFields.birth_time     || '').trim(),
-        place_of_birth: (profileFields.place_of_birth || '').trim(),
+        place_of_birth:      (profileFields.place_of_birth || '').trim(),
+        birth_time_accuracy: (['exact','approximate','unknown'].includes(profileFields.birth_time_accuracy)
+          ? profileFields.birth_time_accuracy : 'unknown'),
       },
       family: familyArray.map(m => ({
         ...blankMember(),
@@ -349,6 +351,12 @@ export class IdentityManager {
 
   /**
    * profileStatus — derived, never stored.
+   */
+  /**
+   * profileStatus — Calculation readiness based on profile completeness.
+   *
+   * P0-8: location resolution is material to personalisation.
+   * A profile with name+DOB+time but no resolvable location is 'approximate'.
    */
   get profileStatus() {
     const p = this.profile
