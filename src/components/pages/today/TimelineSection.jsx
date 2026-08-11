@@ -8,11 +8,13 @@ import { SectionTitle, EmptyState } from '../../common/index.jsx'
 import { Surface, Text, Quality as QualityC, Accent, Status, Radius, Space, FontSize, FontWeight } from '../../../styles/tokens/index.js'
 
 const QUALITY_STARS = { Excellent:4, Good:3, Moderate:2, 'Low energy':1 }
+// Quality colors from design tokens — imported via destructured aliases
+// Status.Success = #4ade80, Accent = #facc15, Status.Caution = #fb923c, Status.Danger = #f87171
 const QUALITY_COLOR = {
-  Excellent:   '#4ade80',
-  Good:        '#facc15',
-  Moderate:    '#fb923c',
-  'Low energy':'#f87171'
+  Excellent:    Status.Success,
+  Good:         Accent,
+  Moderate:     Status.Caution,
+  'Low energy': Status.Danger
 }
 
 function Stars({ count }) {

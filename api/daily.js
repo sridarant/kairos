@@ -9,7 +9,7 @@
  * Performance: single execution path, no redundant computations.
  */
 
-import { getDailyAstronomy, getBirthChart } from '../lib/astronomy/index.js'
+import { getDailyAstronomy, getBirthChart, getBirthChartFromParts } from '../lib/astronomy/index.js'
 import { buildAstroContext }                from '../lib/astrology/index.js'
 import { buildDecisionObject, buildFamilyDecisionObject } from '../lib/decision/engine.js'
 
@@ -69,22 +69,36 @@ function buildMember(name, decisionObj) {
 
 // ─── Week plan ────────────────────────────────────────────────────────────────
 
-function buildWeekPlan(targetDate, astroCtx, primarySeed) {
+/**
+ * buildWeekPlan — 7-day forward planner.
+ *
+ * Sprint 1 fixes (P0-03, P0-04):
+ *   - Now receives birthChart so future days are personalised.
+ *   - Uses suitabilityScore (slot-based raw score) not confidenceScore
+ *     (which was absent and fell back to 50 for every day).
+ *   - Fixed parameter order: daysAhead is now correctly offset, not primarySeed.
+ */
+function buildWeekPlan(targetDate, birthChart, userDob, primarySeed) {
   const plan = []
   for (let offset = 0; offset < 7; offset++) {
     const d   = new Date(targetDate)
     d.setDate(d.getDate() + offset)
     try {
       const dayAstro = getDailyAstronomy(d)
-      const dayCtx   = buildAstroContext(dayAstro, null, null, primarySeed)
-      const dayDec   = buildDecisionObject(dayCtx, primarySeed, 0)
+      // P0-04 fix: pass birthChart so natal chart is used for future days
+      // P0-03 fix: pass correct offset as daysAhead (was incorrectly primarySeed)
+      const dayCtx   = buildAstroContext(dayAstro, birthChart, userDob, offset)
+      const dayDec   = buildDecisionObject(dayCtx, primarySeed, offset)
       const label    = d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })
       plan.push({
         label,
         date:       d.toISOString().slice(0, 10),
         days_ahead: offset,
         stars:      dayDec.stars,
-        confidence: dayDec.confidenceScore || 50,
+        // P0-03 fix: use suitabilityScore (rawScore-based) not confidenceScore
+        // rawScore is the golden slot composite score — a genuine suitability measure.
+        // Normalise 0-9 range to 0-100 for compatibility with downstream sort.
+        confidence: Math.round(Math.max(0, Math.min(100, (dayDec.rawScore + 4) / 13 * 100))),
         summary:    dayDec.focus || 'Balanced day',
         theme:      dayDec.focus || null
       })
@@ -103,7 +117,8 @@ function buildResponse(targetDate, users, feedbackAdj) {
   const primarySeed = userModels[0] ? hashUser(userModels[0]) : 0
 
   const members = userModels.map((u, idx) => {
-    const chart  = getBirthChart(u.day, u.month, u.year, u.bh, u.bm)
+    // P0-NEW-01 fix: use getBirthChartFromParts with numeric args (getBirthChart needs a string)
+    const chart  = getBirthChartFromParts(u.day, u.month, u.year, u.bh, u.bm)
     const ctx    = buildAstroContext(astroData, chart, feedbackAdj, primarySeed + idx)
     const dec    = buildDecisionObject(ctx, primarySeed + idx, 0)
     return buildMember(u.name, dec)
@@ -120,7 +135,13 @@ function buildResponse(targetDate, users, feedbackAdj) {
     ? buildFamilyDecisionObject(members.map(m => ({ ...m, goldenWindow: m.golden_window, avoidWindow: m.avoid_window })))
     : null
 
-  const weekPlan = buildWeekPlan(targetDate, astroData, primarySeed)
+  // P0-04 fix: pass primary user's birth chart to weekly plan calculation
+  const primaryChart  = userModels[0] ? getBirthChartFromParts(
+    userModels[0].day, userModels[0].month, userModels[0].year,
+    userModels[0].bh, userModels[0].bm
+  ) : null
+  const primaryDob    = userModels[0] ? `${userModels[0].day}-${userModels[0].month}-${userModels[0].year}` : null
+  const weekPlan = buildWeekPlan(targetDate, primaryChart, primaryDob, primarySeed)
   const primary  = members[0]
 
   return {

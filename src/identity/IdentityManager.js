@@ -314,27 +314,35 @@ export class IdentityManager {
 
   /**
    * primaryUser — the profile object shaped for /api/daily.
-   * Always returns an object (never null).
+   *
+   * P0-07 fix: now includes place_of_birth and timezone so the API can
+   * use geographic data for natal chart calculations.
+   * Previously these fields were silently stripped at this boundary.
    */
   get primaryUser() {
     const p = this.profile
     return {
-      name:       p.name       || '',
-      dob:        p.dob        || '',
-      birth_time: p.birth_time || '',
-      type:       'primary'
+      name:           p.name           || '',
+      dob:            p.dob            || '',
+      birth_time:     p.birth_time     || '',
+      place_of_birth: p.place_of_birth || '',
+      timezone:       p.timezone       || '',
+      type:           'primary'
     }
   }
 
   /**
    * allUsers — primary + family, as an array for /api/daily.
+   * P0-07 fix: family members also include place_of_birth and timezone.
    */
   get allUsers() {
     return [this.primaryUser, ...this.family.map(m => ({
-      name:       m.name       || '',
-      dob:        m.dob        || '',
-      birth_time: m.birth_time || '',
-      type:       'family'
+      name:           m.name           || '',
+      dob:            m.dob            || '',
+      birth_time:     m.birth_time     || '',
+      place_of_birth: m.place_of_birth || '',
+      timezone:       m.timezone       || '',
+      type:           'family'
     }))]
   }
 

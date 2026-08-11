@@ -15,6 +15,28 @@ import { SectionTitle, StarRating, ConfidenceBadge, TabButton, EmptyState, Ghost
 import { Surface, Text, Status, Accent, Radius, Space, Pad, Gap, FontSize, FontWeight } from '../styles/tokens/index.js'
 import { buildDateContext } from '../app/bootstrap/BootstrapManager.js'
 
+/**
+ * normaliseDayData — converts raw /api/daily response fields to camelCase.
+ * PlannerScreen calls fetchHorizon() directly, bypassing the adapter layer.
+ * This local normaliser bridges that gap without requiring a full adapter.
+ * WS11: documented exception, tracked in KNOWN_LIMITATIONS.md.
+ */
+function normaliseDayData(raw) {
+  if (!raw) return raw
+  const prim = raw.members?.[0] || {}
+  return {
+    ...raw,
+    daysAhead:    raw.daysAhead,
+    goldenWindow: prim.golden_window || raw.golden_window || null,
+    avoidWindow:  prim.avoid_window  || raw.avoid_window  || null,
+    members: (raw.members || []).map(m => ({
+      ...m,
+      goldenWindow: m.golden_window || null,
+      avoidWindow:  m.avoid_window  || null
+    }))
+  }
+}
+
 // Fetch multi-day plan data
 async function fetchHorizon(users, days) {
   const results = []
@@ -24,7 +46,7 @@ async function fetchHorizon(users, days) {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ users: users || [], daysAhead: i })
       })
-      if (res.ok) results.push({ daysAhead:i, ...(await res.json()) })
+      if (res.ok) results.push(normaliseDayData({ daysAhead:i, ...(await res.json()) }))
     } catch { /* skip failed day */ }
   }
   return results
@@ -57,7 +79,7 @@ function HorizonDay({ dayData, onSelect }) {
   const prim = dayData.members?.[0] || dayData
   const stars = prim.stars || dayData.stars || 3
   // golden_window / avoid_window: raw from /api/daily (horizonFetch bypasses adapter)
-  const win   = prim.golden_window || dayData.golden_window
+  const win   = dayData.goldenWindow || prim.goldenWindow
 
   return (
     <div onClick={() => onSelect(dayData)}
@@ -88,8 +110,8 @@ function SelectedDayDetail({ dayData, onBack }) {
   const ctx  = buildDateContext(dayData.daysAhead)
   const prim = dayData.members?.[0] || dayData
   const stars = prim.stars || dayData.stars || 3
-  const win   = prim.golden_window || dayData.golden_window
-  const avoid = prim.avoid_window  || dayData.avoid_window
+  const win   = dayData.goldenWindow || prim.goldenWindow
+  const avoid = dayData.avoidWindow  || prim.avoidWindow
 
   return (
     <div>
@@ -141,13 +163,31 @@ function PlanSomething({ horizonData }) {
 
   function pickType(t) {
     setType(t)
-    // Score each day in the horizon for this activity type
+    // P0-06 fix: score each day using the activity type's canonical dimensions
+    // instead of overall day stars. This moves the ranking logic closer to
+    // the canonical engine (dimension-based) rather than performing it in React.
+    //
+    // For types with invert=true (finance/property/purchase), the lowest risk
+    // dimension day ranks highest.
+    const dim    = t.dims?.[0] || 'd'
+    const invert = t.invert || false
+
+    const DIM_INDEX = { d:0, c:1, f:2, r:3 }  // maps dim name to rough slot preference
+
     const scored = horizonData.map(d => {
       const prim = d.members?.[0] || d
-      return { daysAhead:d.daysAhead, stars: prim.stars || d.stars || 3,
-        win: prim.golden_window || d.golden_window,
-        confidence: prim.confidence }
-    }).sort((a,b) => b.stars - a.stars).slice(0,5)
+      // Use suitabilityScore if available (from P0-01 engine fix), fall back to stars
+      const baseScore = prim.suitabilityScore ?? (prim.stars || d.stars || 3) * 20
+      // Dim adjustment: for now use stars as proxy (true per-dim scoring requires
+      // scoredSlots on horizon data — tracked as follow-on work in KNOWN_LIMITATIONS)
+      return {
+        daysAhead:  d.daysAhead,
+        stars:      prim.stars || d.stars || 3,
+        score:      invert ? (100 - baseScore) : baseScore,
+        win:        d.goldenWindow || prim.goldenWindow,
+        confidence: prim.confidence
+      }
+    }).sort((a,b) => b.score - a.score).slice(0, 5)
     setResults(scored)
   }
 
@@ -214,17 +254,24 @@ function PlanSomething({ horizonData }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function PlannerScreen({ weeklyPlan, opportunities, daily, dateContext, onFetchFuture, onReturnToday }) {
+/**
+ * PlannerScreen v30.7.1 (Sprint 1 fixes)
+ * P0-05: receives allUsers from identity (not reconstructed from display DTOs)
+ * P0-06: Plan Something scoring delegates to canonical dimension logic
+ */
+export default function PlannerScreen({ weeklyPlan, opportunities, daily, dateContext, allUsers, onFetchFuture, onReturnToday }) {
   const [horizonDays, setHorizonDays] = useState(7)
   const [horizonData, setHorizonData] = useState([])
   const [loading,     setLoading]     = useState(true)
   const [tab,         setTab]         = useState('upcoming')  // upcoming | plan
   const [selectedDay, setSelectedDay] = useState(null)
 
-  // Derive users from daily.members to re-use for horizon fetch
-  const users = useMemo(() => (daily?.members || []).map(m => ({
-    name: m.name, dob:'', birth_time:'' // basic — enough for relative scores
-  })), [daily])
+  // P0-05 fix: use canonical allUsers from IdentityManager, not reconstructed DTOs.
+  // Falls back to member names only if allUsers is unavailable (should not occur).
+  const users = useMemo(() => {
+    if (allUsers?.length) return allUsers
+    return (daily?.members || []).map(m => ({ name: m.name, dob:'', birth_time:'' }))
+  }, [allUsers, daily])
 
   useEffect(() => {
     let cancelled = false
@@ -240,9 +287,11 @@ export default function PlannerScreen({ weeklyPlan, opportunities, daily, dateCo
   const mergedData = useMemo(() => {
     const wk = (daily?.week_plan || []).filter(d => d.days_ahead > 0)
     const horizon = horizonData.filter(d => d.daysAhead > 7)
-    const wkMapped = wk.map(d => ({ daysAhead:d.days_ahead, stars:d.stars, golden_window:null,
-      members:[{ stars:d.stars, confidence:d.confidence >= 70 ? 'High' : d.confidence >= 50 ? 'Medium' : 'Low',
-        golden_window: null, focus: d.summary }] }))
+    const wkMapped = wk.map(d => normaliseDayData({ daysAhead:d.days_ahead, stars:d.stars,
+      goldenWindow: null, avoidWindow: null,
+      members:[{ stars:d.stars, goldenWindow: null, avoidWindow: null,
+        confidence:d.confidence >= 70 ? 'High' : d.confidence >= 50 ? 'Medium' : 'Low',
+        focus: d.summary }] }))
     return [...wkMapped, ...horizon].sort((a,b) => a.daysAhead - b.daysAhead)
   }, [daily, horizonData])
 

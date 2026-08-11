@@ -27,7 +27,7 @@ const MESSAGES = {
 export default function DemoBanner({ profileStatus, onSetupProfile }) {
   if (!profileStatus || profileStatus === PROFILE_STATUS.PERSONALISED) return null
   const msg   = MESSAGES[profileStatus] || MESSAGES[PROFILE_STATUS.DEMO]
-  const color = PROFILE_STATUS_COLOR[profileStatus] || '#fbbf24'
+  const color = PROFILE_STATUS_COLOR[profileStatus] || Accent
 
   return (
     <div style={{

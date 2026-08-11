@@ -82,7 +82,8 @@ function FamilyOverview({ brief, daily, dateContext, onMemberSelect, onFetchFutu
   const activities  = (fa?.recommended || fb?.activities || []).slice(0, 3)
   const cautions    = fa?.avoid || fb?.avoid || []
   const moodColor   = energy === 'High' ? Status.Success : Accent
-  const upcoming    = (daily?.week_plan || []).filter(d => d.days_ahead > 0 && d.stars >= 4).slice(0, 3)
+  // week_plan uses snake_case from raw API; days_ahead is normalised here
+  const upcoming    = (daily?.week_plan || []).filter(d => (d.days_ahead||d.daysAhead) > 0 && d.stars >= 4).slice(0, 3)
 
   return (
     <div>
@@ -166,13 +167,13 @@ function FamilyOverview({ brief, daily, dateContext, onMemberSelect, onFetchFutu
         <>
           <SectionTitle>Upcoming Good Windows</SectionTitle>
           {upcoming.map((d,i) => (
-            <div key={i} onClick={() => onFetchFuture?.(d.days_ahead)}
+            <div key={i} onClick={() => onFetchFuture?.(d.days_ahead||d.daysAhead)}
               style={{ display:'flex', gap:Space.md, padding:Pad.card,
                 background:Surface.Card, borderRadius:Radius.card, marginBottom:Gap.card, cursor:'pointer' }}>
               <div style={{ flexShrink:0, minWidth:52, textAlign:'center' }}>
                 <p style={{ fontSize:FontSize.Caption, color:Accent, fontWeight:FontWeight.Bold,
                   textTransform:'uppercase', letterSpacing:'0.05em' }}>
-                  {d.days_ahead===1?'Tmrw':`+${d.days_ahead}d`}
+                  {(d.days_ahead||d.daysAhead)===1?'Tmrw':`+${d.days_ahead||d.daysAhead}d`}
                 </p>
                 <p style={{ fontSize:FontSize.CardTitle, fontWeight:FontWeight.Heavy, color:Text.Primary }}>
                   {d.label?.split(' ')[0]}

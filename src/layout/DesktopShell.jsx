@@ -181,6 +181,7 @@ export default function DesktopShell({ bs }) {
           <PlannerScreen
             weeklyPlan={bs.weeklyPlan} opportunities={bs.opportunities}
             daily={bs.daily} dateContext={bs.dateContext}
+            allUsers={bs.allUsers}
             onFetchFuture={bs.handleFetchFuture}
             onReturnToday={bs.handleReturnToday}
           />

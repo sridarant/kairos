@@ -74,7 +74,9 @@ export function buildApplicationDTOs(daily, feedbackHistory = []) {
   const ranked  = rankRecommendations(buildDailyPackages(primary, null, daily.family_alignment), prefs)
   return {
     brief:                  adaptDailyBrief(buildMorningBrief(daily, primary), daily),
-    recommendationPackages: adaptRecommendations(ranked, primary?.stars || daily?.stars),
+    // P0-02 fix: forward primary member's suitability stars to adaptRecommendations
+    // so the overallStars cap is actually applied in the adapter.
+    recommendationPackages: adaptRecommendations(ranked, primary?.stars || 3),
     members:                adaptMembers(daily.members),
     timeline:               adaptTimeline(primary?.timeline),
     weeklyPlan:             adaptWeeklyPlan(buildWeeklyPlan(daily.week_plan)),
