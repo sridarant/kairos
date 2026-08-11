@@ -1,231 +1,187 @@
 /**
- * PlannerScreen v30.5 — Planning workspace.
+ * PlannerScreen v30.9 — Activity-based planning workspace.
  *
- * Answers: "When should I do something?"
- * NOT a duplicate of Today.
+ * Constitution §5: No business logic in React.
+ * All ranking/explanation done in lib/planning/activityPlanner.js.
+ * This component: fetches data, calls canonical engine, renders results.
  *
- * Features:
- *   • 7/14-day horizon with real calculated data
- *   • Upcoming best windows (by category)
- *   • Plan Something: pick activity type → see ranked dates
- *   • Selected day: full day detail
+ * Plan Something:
+ *   - Selected activity actually changes scoring
+ *   - Same date ranks differently for different activities
+ *   - Explanations trace to engine reason codes
+ *   - Medical/financial safety notes surfaced automatically
  */
 import { useState, useEffect, useMemo } from 'react'
-import { SectionTitle, StarRating, ConfidenceBadge, TabButton, EmptyState, GhostButton } from './common/index.jsx'
-import { Surface, Text, Status, Accent, Radius, Space, Pad, Gap, FontSize, FontWeight } from '../styles/tokens/index.js'
+import { ACTIVITY_TYPES, planActivity } from '../../lib/planning/activityPlanner.js'
+import { Surface, Text, Accent, Status } from '../styles/tokens/index.js'
+import { Space, FontSize, FontWeight, Radius } from '../styles/tokens/index.js'
+import { EmptyState } from './common/index.jsx'
 import { buildDateContext } from '../app/bootstrap/BootstrapManager.js'
-import { adaptHorizonDay, adaptHorizonDays } from '../../lib/adapters/PlannerHorizonAdapter.js'
 
-// Sprint 3: normaliseDayData removed. Use adaptHorizonDay/adaptHorizonDays from PlannerHorizonAdapter.
+// ─── Fetch horizon data from API ─────────────────────────────────────────────
 
-// Fetch multi-day plan data
 async function fetchHorizon(users, days) {
   const results = []
   for (let i = 1; i <= days; i++) {
     try {
+      const now = new Date()
+      const base = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      base.setDate(base.getDate() + i)
+      const yyyy = base.getFullYear()
+      const mm   = String(base.getMonth()+1).padStart(2,'0')
+      const dd   = String(base.getDate()).padStart(2,'0')
+      const calculationDate = `${yyyy}-${mm}-${dd}`
       const res = await fetch('/api/daily', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ users: users || [], daysAhead: i })
+        body: JSON.stringify({ users:users||[], daysAhead:i, calculationDate })
       })
-      if (res.ok) results.push(adaptHorizonDay({ ...(await res.json()) }, i))
-    } catch { /* skip failed day */ }
+      if (res.ok) {
+        const d = await res.json()
+        results.push({ daysAhead:i, date:calculationDate, ...d })
+      }
+    } catch { /* skip failed days */ }
   }
   return results
 }
 
-const PLAN_TYPES = [
-  { id:'meeting',    label:'Important meeting',   icon:'💬', dims:['c'] },
-  { id:'career',     label:'Work decision',       icon:'💼', dims:['d'] },
-  { id:'finance',    label:'Financial decision',  icon:'💰', dims:['r'], invert:true },
-  { id:'purchase',   label:'Major purchase',      icon:'🛍️', dims:['r'], invert:true },
-  { id:'travel',     label:'Travel',              icon:'✈️', dims:['d'] },
-  { id:'convo',      label:'Important conversation', icon:'🗣️', dims:['c'] },
-  { id:'family',     label:'Family activity',     icon:'👨‍👩‍👧', dims:['c','f'] },
-  { id:'study',      label:'Study / learning',    icon:'📚', dims:['f'] },
-  { id:'health',     label:'Health activity',     icon:'🌿', dims:['f'] },
-  { id:'property',   label:'Property decision',   icon:'🏠', dims:['r'], invert:true },
-  { id:'other',      label:'Other',               icon:'✦',  dims:['d','c','f'] },
+// ─── Activity selector ────────────────────────────────────────────────────────
+
+const ACTIVITY_LIST = [
+  { id:'conversation', label:'Conversation' },
+  { id:'meeting',      label:'Meeting'       },
+  { id:'career',       label:'Career'        },
+  { id:'finance',      label:'Finance'       },
+  { id:'purchase',     label:'Purchase'      },
+  { id:'property',     label:'Property'      },
+  { id:'travel',       label:'Travel'        },
+  { id:'study',        label:'Study'         },
+  { id:'family',       label:'Family'        },
+  { id:'wellness',     label:'Wellness'      },
+  { id:'medical_routine',  label:'Health check'     },
+  { id:'medical_decision', label:'Medical decision'  },
+  { id:'other',        label:'Other'         },
 ]
 
-function horizonScore(dayData, type) {
-  const members = dayData.members || []
-  const primary  = members[0]
-  if (!primary) return 0
-  // Use the stars from the day's primary member as base score
-  return primary.stars || dayData.stars || 3
-}
-
-function HorizonDay({ dayData, onSelect }) {
-  const ctx  = buildDateContext(dayData.daysAhead)
-  const prim = dayData.members?.[0] || dayData
-  const stars = prim.stars || dayData.stars || 3
-  // golden_window / avoid_window: raw from /api/daily (horizonFetch bypasses adapter)
-  const win   = dayData.goldenWindow || prim.goldenWindow
-
-  return (
-    <div onClick={() => onSelect(dayData)}
-      style={{ display:'flex', alignItems:'center', gap:Space.md, padding:Pad.cardSm,
-        background:Surface.Card, borderRadius:Radius.card, marginBottom:Gap.card, cursor:'pointer' }}>
-      <div style={{ flexShrink:0, minWidth:56, textAlign:'center' }}>
-        <p style={{ fontSize:FontSize.Badge, color:Accent, fontWeight:FontWeight.Bold,
-          textTransform:'uppercase', letterSpacing:'0.05em' }}>
-          {ctx.shortWeekday}
-        </p>
-        <p style={{ fontSize:FontSize.CardTitle, fontWeight:FontWeight.Heavy, color:Text.Primary }}>
-          {ctx.shortDate}
-        </p>
-      </div>
-      <div style={{ width:1, alignSelf:'stretch', background:Surface.Line }} />
-      <div style={{ flex:1 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:Space.sm, marginBottom:Space.xs }}>
-          <StarRating value={stars} size={FontSize.Caption} />
-          <span style={{ fontSize:FontSize.Caption, color:Text.Secondary }}>{ctx.weekday}</span>
-        </div>
-        {win && <p style={{ fontSize:FontSize.Caption, color:Accent, fontWeight:FontWeight.Bold }}>⏰ {win}</p>}
-      </div>
-    </div>
-  )
-}
-
-function SelectedDayDetail({ dayData, onBack }) {
-  const ctx  = buildDateContext(dayData.daysAhead)
-  const prim = dayData.members?.[0] || dayData
-  const stars = prim.stars || dayData.stars || 3
-  const win   = dayData.goldenWindow || prim.goldenWindow
-  const avoid = dayData.avoidWindow  || prim.avoidWindow
-
+function ActivitySelector({ selected, onSelect }) {
   return (
     <div>
-      <button onClick={onBack} style={{ background:'none', border:'none', color:Accent,
-        fontSize:FontSize.CardTitle, cursor:'pointer', fontFamily:'inherit',
-        marginBottom:Space.xl, padding:0 }}>
-        ← Back to horizon
-      </button>
-      <p style={{ fontSize:FontSize.Caption, color:Text.Secondary, marginBottom:Space.xs }}>
-        {ctx.relativeLabel}
+      <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.08em',
+        color:Text.Muted, fontWeight:FontWeight.Medium, marginBottom:Space.md }}>
+        What are you planning?
       </p>
-      <p style={{ fontSize:FontSize.Heading2, fontWeight:FontWeight.Heavy, color:Text.Primary, marginBottom:Space.sm }}>
-        {ctx.fullDate}
-      </p>
-      <div style={{ display:'flex', gap:Space.sm, alignItems:'center', marginBottom:Space.xl }}>
-        <StarRating value={stars} size={FontSize.Body} />
-        <ConfidenceBadge level={prim.confidence || 'Medium'} size={FontSize.Caption} />
-      </div>
-
-      {win && (
-        <div style={{ background:`${Accent}11`, borderRadius:Radius.lg, padding:'10px 12px', marginBottom:Space.md }}>
-          <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.07em',
-            color:Text.Secondary, fontWeight:FontWeight.Medium, marginBottom:Space.xs }}>Best window</p>
-          <p style={{ fontSize:FontSize.Heading2, fontWeight:FontWeight.Heavy, color:Accent }}>{win}</p>
-        </div>
-      )}
-      {avoid && (
-        <div style={{ background:`${Status.Danger}18`, borderRadius:Radius.lg,
-          padding:'8px 12px', marginBottom:Space.md }}>
-          <p style={{ fontSize:FontSize.Badge, color:Status.Danger, fontWeight:FontWeight.Bold }}>
-            ⚠ Avoid: {avoid}
-          </p>
-        </div>
-      )}
-      {prim.focus && (
-        <div style={{ marginBottom:Space.xl }}>
-          <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.07em',
-            color:Text.Secondary, fontWeight:FontWeight.Medium, marginBottom:Space.xs }}>Theme</p>
-          <p style={{ fontSize:FontSize.Body, color:Text.Primary }}>{prim.focus}</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function PlanSomething({ horizonData }) {
-  const [type,    setType]    = useState(null)
-  const [results, setResults] = useState([])
-
-  function pickType(t) {
-    setType(t)
-    // P0-06 fix: score each day using the activity type's canonical dimensions
-    // instead of overall day stars. This moves the ranking logic closer to
-    // the canonical engine (dimension-based) rather than performing it in React.
-    //
-    // For types with invert=true (finance/property/purchase), the lowest risk
-    // dimension day ranks highest.
-    const dim    = t.dims?.[0] || 'd'
-    const invert = t.invert || false
-
-    const DIM_INDEX = { d:0, c:1, f:2, r:3 }  // maps dim name to rough slot preference
-
-    const scored = horizonData.map(d => {
-      const prim = d.members?.[0] || d
-      // Use suitabilityScore if available (from P0-01 engine fix), fall back to stars
-      const baseScore = prim.suitabilityScore ?? (prim.stars || d.stars || 3) * 20
-      // Dim adjustment: for now use stars as proxy (true per-dim scoring requires
-      // scoredSlots on horizon data — tracked as follow-on work in KNOWN_LIMITATIONS)
-      return {
-        daysAhead:  d.daysAhead,
-        stars:      prim.stars || d.stars || 3,
-        score:      invert ? (100 - baseScore) : baseScore,
-        win:        d.goldenWindow || prim.goldenWindow,
-        confidence: prim.confidence
-      }
-    }).sort((a,b) => b.score - a.score).slice(0, 5)
-    setResults(scored)
-  }
-
-  if (!type) return (
-    <div>
-      <p style={{ fontSize:FontSize.BodySmall, color:Text.Secondary, lineHeight:1.6, marginBottom:Space.xl }}>
-        What are you planning? Kairos will find your best dates.
-      </p>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:Gap.grid }}>
-        {PLAN_TYPES.map(t => (
-          <button key={t.id} onClick={() => pickType(t)} style={{
-            background:Surface.Card, border:'none', borderRadius:Radius.card,
-            padding:'14px 10px', cursor:'pointer', fontFamily:'inherit',
-            display:'flex', flexDirection:'column', alignItems:'center', gap:Space.sm, minHeight:74 }}>
-            <span style={{ fontSize:FontSize.Heading2 }}>{t.icon}</span>
-            <span style={{ fontSize:FontSize.BodySmall, color:Text.Primary, textAlign:'center', lineHeight:1.3 }}>
-              {t.label}
-            </span>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:Space.sm }}>
+        {ACTIVITY_LIST.map(a => (
+          <button key={a.id} onClick={() => onSelect(a.id)}
+            style={{ padding:`6px ${Space.md}px`,
+              background: selected===a.id ? Accent : Surface.Subtle,
+              color: selected===a.id ? '#fff' : Text.Secondary,
+              border:'none', borderRadius:Radius.pill, cursor:'pointer',
+              fontFamily:'inherit', fontSize:FontSize.Caption,
+              fontWeight: selected===a.id ? FontWeight.SemiBold : FontWeight.Regular,
+              minHeight:32 }}>
+            {a.label}
           </button>
         ))}
       </div>
     </div>
   )
+}
+
+// ─── Plan result display ──────────────────────────────────────────────────────
+
+function SafetyNote({ note }) {
+  if (!note) return null
+  return (
+    <div style={{ borderLeft:`3px solid ${Status.Caution}`, paddingLeft:Space.md,
+      marginBottom:Space.xl }}>
+      <p style={{ fontSize:FontSize.Caption, color:Text.Secondary, lineHeight:1.5 }}>
+        {note}
+      </p>
+    </div>
+  )
+}
+
+function DayResult({ result, label, rank }) {
+  const ctx = buildDateContext(result.daysAhead)
+  const dimScore = result.bestDimScore
+  const approx   = result.isApproximate
 
   return (
-    <div>
-      <button onClick={() => { setType(null); setResults([]) }} style={{
-        background:'none', border:'none', color:Accent, fontSize:FontSize.CardTitle,
-        cursor:'pointer', fontFamily:'inherit', marginBottom:Space.xl, padding:0 }}>
-        ← Back
-      </button>
-      <p style={{ fontSize:FontSize.CardTitle, fontWeight:FontWeight.Bold,
-        color:Text.Primary, marginBottom:Space.xl }}>
-        {type.icon} {type.label} — Best Dates
+    <div style={{ marginBottom:Space.xl }}>
+      <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.08em',
+        color:Text.Muted, fontWeight:FontWeight.Medium, marginBottom:Space.sm }}>
+        {label}
       </p>
-      {results.length === 0 ? (
-        <EmptyState icon="📅" title="Loading dates…" />
-      ) : results.map((r, i) => {
+      <p style={{ fontSize:FontSize.Heading3, fontWeight:FontWeight.Bold, color:Text.Primary,
+        marginBottom:Space.xs }}>
+        {ctx.weekday}, {ctx.dayMonth}
+      </p>
+
+      {result.bestWindow && (
+        <div style={{ display:'inline-flex', alignItems:'center', gap:Space.xs,
+          background:Surface.Subtle, borderRadius:Radius.pill,
+          padding:`4px ${Space.md}px`, marginBottom:Space.md }}>
+          <span style={{ fontSize:12, color:Accent }}>●</span>
+          <span style={{ fontSize:FontSize.Caption, color:Text.Primary, fontWeight:FontWeight.Medium }}>
+            {result.bestWindow}
+          </span>
+        </div>
+      )}
+
+      {/* Why — from structured evidence */}
+      {result.explanation?.why && (
+        <p style={{ fontSize:FontSize.BodySmall, color:Text.Secondary,
+          lineHeight:1.6, marginBottom:Space.sm }}>
+          {result.explanation.why}
+        </p>
+      )}
+
+      {/* Caution — if present */}
+      {result.explanation?.caution && (
+        <p style={{ fontSize:FontSize.Caption, color:Status.Caution,
+          lineHeight:1.5 }}>
+          ⚠ {result.explanation.caution}
+        </p>
+      )}
+
+      {approx && (
+        <p style={{ fontSize:FontSize.Badge, color:Text.Muted, marginTop:Space.xs }}>
+          Approximate — full profile data unavailable for this day
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── Horizon day list ─────────────────────────────────────────────────────────
+
+function HorizonList({ ranked, activityId }) {
+  if (!ranked?.length) return null
+  return (
+    <div>
+      <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.08em',
+        color:Text.Muted, fontWeight:FontWeight.Medium, marginBottom:Space.md }}>
+        All dates
+      </p>
+      {ranked.map((r, i) => {
         const ctx = buildDateContext(r.daysAhead)
-        const isTop = i === 0
+        const scoreBar = Math.round(r.score / 100 * 8)  // visual width 0-8 chars
         return (
-          <div key={i} style={{
-            background: isTop ? `${Accent}15` : Surface.Card,
-            border: isTop ? `1px solid ${Accent}44` : 'none',
-            borderRadius:Radius.card, padding:Pad.card, marginBottom:Gap.card }}>
-            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:Space.xs }}>
-              <span style={{ fontSize:FontSize.CardTitle, fontWeight:FontWeight.Bold, color:Text.Primary }}>
-                {isTop ? '★ ' : `${i+1}. `}{ctx.fullDate.replace(/,?\s*\d{4}$/, '')}
-              </span>
-              <ConfidenceBadge level={r.confidence} size={FontSize.Badge} />
+          <div key={i} style={{ display:'grid', gridTemplateColumns:'130px 1fr auto',
+            gap:Space.md, padding:`${Space.sm}px 0`,
+            borderBottom:`1px solid ${Surface.Line}`, alignItems:'center' }}>
+            <span style={{ fontSize:FontSize.Caption, color:Text.Primary, fontWeight:FontWeight.Medium }}>
+              {ctx.weekday.slice(0,3)}, {ctx.shortDate}
+            </span>
+            <span style={{ fontSize:FontSize.Caption, color:Text.Secondary }}>
+              {r.bestWindow || '—'}
+            </span>
+            <div style={{ display:'flex', gap:2 }}>
+              {Array.from({length:5},(_,j)=>(
+                <div key={j} style={{ width:4, height:12, borderRadius:2,
+                  background: j < Math.round(r.score/20) ? Accent : Surface.Line }} />
+              ))}
             </div>
-            {r.win && (
-              <p style={{ fontSize:FontSize.Caption, color:Accent, fontWeight:FontWeight.Bold, marginBottom:Space.xs }}>
-                ⏰ {r.win}
-              </p>
-            )}
-            <StarRating value={r.stars} size={FontSize.Caption} />
           </div>
         )
       })}
@@ -235,25 +191,22 @@ function PlanSomething({ horizonData }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-/**
- * PlannerScreen v30.7.1 (Sprint 1 fixes)
- * P0-05: receives allUsers from identity (not reconstructed from display DTOs)
- * P0-06: Plan Something scoring delegates to canonical dimension logic
- */
-export default function PlannerScreen({ weeklyPlan, opportunities, daily, dateContext, allUsers, onFetchFuture, onReturnToday }) {
+export default function PlannerScreen({
+  weeklyPlan, opportunities, daily, dateContext, allUsers,
+  onFetchFuture, onReturnToday
+}) {
+  const [activityId,  setActivityId]  = useState(null)
   const [horizonDays, setHorizonDays] = useState(7)
   const [horizonData, setHorizonData] = useState([])
-  const [loading,     setLoading]     = useState(true)
-  const [tab,         setTab]         = useState('upcoming')  // upcoming | plan
-  const [selectedDay, setSelectedDay] = useState(null)
+  const [loading,     setLoading]     = useState(false)
 
-  // P0-05 fix: use canonical allUsers from IdentityManager, not reconstructed DTOs.
-  // Falls back to member names only if allUsers is unavailable (should not occur).
+  // Use canonical allUsers from identity (P0-05/P0-08 fix)
   const users = useMemo(() => {
     if (allUsers?.length) return allUsers
-    return (daily?.members || []).map(m => ({ name: m.name, dob:'', birth_time:'' }))
+    return (daily?.members || []).map(m => ({ name:m.name, dob:'', birth_time:'' }))
   }, [allUsers, daily])
 
+  // Fetch horizon when days changes
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -262,86 +215,82 @@ export default function PlannerScreen({ weeklyPlan, opportunities, daily, dateCo
       if (!cancelled) { setHorizonData(data); setLoading(false) }
     })
     return () => { cancelled = true }
-  }, [horizonDays])
+  }, [horizonDays, JSON.stringify(users)])
 
-  // Merge week_plan data for the first 7 days
-  const mergedData = useMemo(() => {
-    const wk = (daily?.week_plan || []).filter(d => d.days_ahead > 0)
-    const horizon = horizonData.filter(d => d.daysAhead > 7)
-    const wkMapped = wk.map(d => adaptHorizonDay({
-      stars:           d.stars,
-      suitabilityScore:d.suitabilityScore,
-      suitabilityTier: d.suitabilityTier,
-      golden_window:   d.golden_window || null,
-      avoid_window:    d.avoid_window  || null,
-      decision:        d.decision || 'WAIT',
-      focus:           d.theme || d.summary || null,
-      members:[{
-        stars:           d.stars,
-        suitabilityScore:d.suitabilityScore,
-        suitabilityTier: d.suitabilityTier,
-        golden_window:   null,
-        confidence:      d.confidence || 'Medium',
-        focus:           d.theme || d.summary || null
-      }]
-    }, d.days_ahead))
-    return [...wkMapped, ...horizon].sort((a,b) => a.daysAhead - b.daysAhead)
-  }, [daily, horizonData])
-
-  if (selectedDay) return (
-    <div style={{ padding:`${Space['3xl']}px ${Space.xl}px` }}>
-      <SelectedDayDetail dayData={selectedDay} onBack={() => setSelectedDay(null)} />
-    </div>
-  )
+  // Run canonical planning engine (not React business logic)
+  const planResult = useMemo(() => {
+    if (!activityId || !horizonData.length) return null
+    return planActivity(horizonData, activityId, { maxResults:horizonDays })
+  }, [activityId, horizonData])
 
   return (
-    <div style={{ padding:`${Space['3xl']}px ${Space.xl}px` }}>
+    <div style={{ padding:`${Space['3xl']}px ${Space.xl}px`,
+      minHeight:'100%', background:Surface.Background }}>
+
       {/* Header */}
-      <div style={{ marginBottom:Space.xl }}>
-        <p style={{ fontSize:FontSize.Heading2, fontWeight:FontWeight.Heavy, color:Text.Primary, marginBottom:Space.xs }}>
-          Plan Ahead
-        </p>
-        <p style={{ fontSize:FontSize.Caption, color:Text.Secondary }}>
+      <div style={{ marginBottom:Space['3xl'] }}>
+        <p style={{ fontSize:FontSize.Caption, color:Text.Muted, marginBottom:Space.xs }}>
           {dateContext?.weekLabel || 'This week'}
+        </p>
+        <p style={{ fontSize:FontSize.Heading2, fontWeight:FontWeight.Bold, color:Text.Primary }}>
+          Plan Ahead
         </p>
       </div>
 
-      {/* Horizon selector */}
-      <div style={{ display:'flex', gap:Space.sm, marginBottom:Space.xl }}>
+      {/* Horizon toggle */}
+      <div style={{ display:'flex', gap:Space.sm, marginBottom:Space['3xl'] }}>
         {[7, 14].map(d => (
-          <button key={d} onClick={() => setHorizonDays(d)} style={{
-            background: horizonDays === d ? Accent : Surface.Card,
-            color: horizonDays === d ? Text.Inverse : Text.Secondary,
-            border:'none', borderRadius:Radius.pill, padding:`6px 16px`,
-            fontSize:FontSize.Caption, fontWeight:FontWeight.Bold,
-            cursor:'pointer', fontFamily:'inherit', minHeight:32 }}>
+          <button key={d} onClick={() => setHorizonDays(d)}
+            style={{ padding:`5px ${Space.md}px`,
+              background: horizonDays===d ? Accent : Surface.Subtle,
+              color: horizonDays===d ? '#fff' : Text.Secondary,
+              border:'none', borderRadius:Radius.pill, cursor:'pointer',
+              fontSize:FontSize.Caption, fontFamily:'inherit', minHeight:30 }}>
             {d} days
           </button>
         ))}
       </div>
 
-      {/* Tab bar */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:Space.sm, marginBottom:Space.xl }}>
-        <TabButton label="Upcoming windows" active={tab==='upcoming'} onClick={() => setTab('upcoming')} />
-        <TabButton label="Plan something"   active={tab==='plan'}     onClick={() => setTab('plan')} />
+      {/* Activity selector */}
+      <div style={{ marginBottom:Space['3xl'] }}>
+        <ActivitySelector selected={activityId} onSelect={setActivityId} />
       </div>
 
-      {tab === 'upcoming' && (
+      {loading && (
+        <p style={{ fontSize:FontSize.Caption, color:Text.Muted }}>
+          Loading {horizonDays}-day horizon…
+        </p>
+      )}
+
+      {/* Results */}
+      {planResult && !loading && (
         <div>
-          {loading ? (
-            <p style={{ fontSize:FontSize.Caption, color:Text.Secondary }}>Loading {horizonDays}-day horizon…</p>
-          ) : mergedData.length === 0 ? (
-            <EmptyState icon="📅" title="No horizon data" body="Could not load future guidance." />
-          ) : (
-            mergedData.map((d, i) => (
-              <HorizonDay key={i} dayData={d} onSelect={setSelectedDay} />
-            ))
+          {/* Safety note */}
+          <SafetyNote note={planResult.safetyNote} />
+
+          {/* Best date */}
+          {planResult.best && (
+            <DayResult result={planResult.best} label="Best time" rank={1} />
           )}
+
+          {/* Alternative */}
+          {planResult.alternative && (
+            <DayResult result={planResult.alternative} label="Alternative" rank={2} />
+          )}
+
+          {/* Divider */}
+          <div style={{ borderTop:`1px solid ${Surface.Line}`, marginBottom:Space['3xl'] }} />
+
+          {/* Full ranked list */}
+          <HorizonList ranked={planResult.ranked} activityId={activityId} />
         </div>
       )}
 
-      {tab === 'plan' && (
-        <PlanSomething horizonData={mergedData} />
+      {/* Prompt when no activity selected */}
+      {!activityId && !loading && (
+        <p style={{ fontSize:FontSize.BodySmall, color:Text.Muted, lineHeight:1.6 }}>
+          Select what you are planning above to see the best dates and windows, ranked for that activity.
+        </p>
       )}
     </div>
   )

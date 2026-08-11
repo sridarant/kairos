@@ -13,6 +13,7 @@ import { useState, useMemo } from 'react'
 import {
   SectionTitle, StarRating, ConfidenceBadge, EmptyState, GhostButton
 } from './common/index.jsx'
+import { computeFamilyOverlap } from '../../lib/planning/familyOverlap.js'
 import {
   Surface, Text, Status, Accent, Radius, Space, Pad, Gap, FontSize, FontWeight
 } from '../styles/tokens/index.js'
@@ -72,53 +73,46 @@ function MemberCompactCard({ member, idx, onSelect }) {
 
 // ─── Family Overview (Everyone selected) ─────────────────────────────────────
 
-function FamilyOverview({ brief, daily, dateContext, onMemberSelect, onFetchFuture }) {
+function FamilyOverview({ brief, daily, members, dateContext, onMemberSelect, onFetchFuture }) {
   const fa  = daily?.family_alignment
   const fb  = brief?.familyBrief
-  const members = (daily?.members || []).filter(m => m.name)
+  // P0-07 / canonical: compute actual slot-level overlap from engine data
+  const apiMembers = (members || daily?.members || []).filter(m => m.name)
+  const membersWithSlots = apiMembers.map(m => ({
+    name: m.name, scoredSlots: m.scoredSlots || []
+  }))
+  const overlap = computeFamilyOverlap(membersWithSlots)
 
-  const bestShared  = fa?.bestSharedWindow || fa?.best_shared_window || fb?.bestWindow
-  const energy      = fb?.energy || (fa?.stars >= 4 ? 'High' : 'Moderate')
+  // Legacy fields for backward compatibility
   const activities  = (fa?.recommended || fb?.activities || []).slice(0, 3)
   const cautions    = fa?.avoid || fb?.avoid || []
-  const moodColor   = energy === 'High' ? Status.Success : Accent
   // week_plan uses snake_case from raw API; days_ahead is normalised here
   const upcoming    = (daily?.week_plan || []).filter(d => (d.days_ahead||d.daysAhead) > 0 && d.stars >= 4).slice(0, 3)
 
   return (
     <div>
-      {/* Family mood */}
-      <div style={{ background:Surface.Card, borderRadius:Radius['2xl'], padding:'20px 18px', marginBottom:Space.sm }}>
-        <div style={{ display:'flex', alignItems:'center', gap:Space.md, marginBottom:Space.md }}>
-          <span style={{ fontSize:32 }}>👨‍👩‍👧</span>
-          <div>
-            <p style={{ fontSize:FontSize.Heading3, fontWeight:FontWeight.Bold, color:moodColor }}>
-              {energy === 'High' ? 'Strong Harmony' : 'Steady Energy'}
-            </p>
-            <p style={{ fontSize:FontSize.Caption, color:Text.Secondary }}>
-              {energy === 'High' ? 'Everyone is aligned — great for shared activities.' : 'Keep plans relaxed and flexible.'}
-            </p>
-          </div>
-        </div>
+      {/* Family timing */}
+      <div style={{ marginBottom:Space.xl }}>
 
-        {fa?.stars && (
-          <div style={{ display:'flex', alignItems:'center', gap:Space.sm, marginBottom:Space.md }}>
-            <StarRating value={fa.stars} size={FontSize.Body} />
-            <ConfidenceBadge level={fa.confidence} size={FontSize.Caption} />
+        {overlap.bestSharedWindow && (
+          <div style={{ borderLeft:`3px solid ${Accent}`, paddingLeft:Space.md, marginBottom:Space.md }}>
+            <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.08em',
+              color:Text.Muted, fontWeight:FontWeight.Medium, marginBottom:Space.xs }}>
+              {overlap.overlapType === 'all-members' ? 'Everyone' :
+               overlap.overlapType === 'partial' ? 'Partial overlap' : 'Best shared'}
+            </p>
+            <p style={{ fontSize:FontSize.Heading3, fontWeight:FontWeight.Bold, color:Text.Primary, marginBottom:Space.xs }}>
+              {overlap.bestSharedWindow}
+            </p>
+            <p style={{ fontSize:FontSize.Caption, color:Text.Secondary, lineHeight:1.5 }}>
+              {overlap.explanation}
+            </p>
           </div>
         )}
-
-        {bestShared && (
-          <div style={{ background:`${Accent}11`, borderRadius:Radius.lg, padding:'9px 12px', marginBottom:Space.sm }}>
-            <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.07em',
-              color:Text.Secondary, fontWeight:FontWeight.Medium, marginBottom:Space.xs }}>
-              Best Time Together
-            </p>
-            <p style={{ fontSize:FontSize.Heading2, fontWeight:FontWeight.Heavy, color:Accent }}>{bestShared}</p>
-            <p style={{ fontSize:FontSize.Badge, color:Text.Secondary, marginTop:Space.xs }}>
-              Derived from individual members' windows
-            </p>
-          </div>
+        {!overlap.bestSharedWindow && apiMembers.length > 1 && (
+          <p style={{ fontSize:FontSize.Caption, color:Text.Secondary, marginBottom:Space.md }}>
+            {overlap.explanation}
+          </p>
         )}
 
         {activities.length > 0 && (
@@ -138,14 +132,10 @@ function FamilyOverview({ brief, daily, dateContext, onMemberSelect, onFetchFutu
         )}
 
         {cautions.length > 0 && (
-          <div style={{ background:`${Status.Danger}18`, borderRadius:Radius.lg, padding:'9px 12px', marginTop:Space.sm }}>
-            <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.07em',
-              color:Status.Danger, fontWeight:FontWeight.Medium, marginBottom:Space.xs }}>
-              Worth Noting
+          <div style={{ borderLeft:`3px solid ${Status.Caution}`, paddingLeft:Space.md, marginTop:Space.md }}>
+            <p style={{ fontSize:FontSize.Caption, color:Text.Secondary, lineHeight:1.4 }}>
+              {cautions[0]}
             </p>
-            {cautions.slice(0,2).map((c,i) => (
-              <p key={i} style={{ fontSize:FontSize.BodySmall, color:Text.Secondary, lineHeight:1.4 }}>{c}</p>
-            ))}
           </div>
         )}
       </div>
