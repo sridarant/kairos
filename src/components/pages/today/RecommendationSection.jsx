@@ -19,7 +19,7 @@ function priorityBadge(pkg, rank) {
     return { label:'Top opportunity', color: Accent, bg:`${Accent}15` }
   }
   if (rank <= 1 && pkg.stars >= 4) {
-    return { label:'Important today', color: Status.Success, bg:'rgba(74,222,128,0.1)' }
+    return { label:'Important today', color: Status.Success, bg:`${Status.Success}1a` }
   }
   if (pkg.stars >= 3) {
     return { label:'Worth considering', color: Text.Secondary, bg:'transparent' }

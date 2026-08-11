@@ -73,7 +73,7 @@ export default function MorningBriefSection({ brief, primaryUser }) {
 
         {/* Theme + best window */}
         <div style={{ display:'flex', alignItems:'stretch', gap: Space.sm, marginBottom: Space.sm }}>
-          <div style={{ flex:1, background:'rgba(255,255,255,0.04)', borderRadius: Radius.lg, padding:'10px 12px' }}>
+          <div style={{ flex:1, background:Surface.Subtle, borderRadius: Radius.lg, padding:'10px 12px' }}>
             <p style={{ fontSize: FontSize.Label, textTransform:'uppercase', letterSpacing:'0.07em',
               color: Text.Secondary, fontWeight: FontWeight.Medium, marginBottom: Space.xs }}>
               Today's Focus
@@ -84,12 +84,12 @@ export default function MorningBriefSection({ brief, primaryUser }) {
           </div>
           <div style={{ flex:1, background: Accent, borderRadius: Radius.lg, padding:'10px 12px' }}>
             <p style={{ fontSize: FontSize.Label, textTransform:'uppercase', letterSpacing:'0.07em',
-              fontWeight: FontWeight.Medium, opacity:0.6, marginBottom: Space.xs, color:'#000' }}>
+              fontWeight: FontWeight.Medium, opacity:0.6, marginBottom: Space.xs, color: Text.Inverse }}>
               Best Window{mins != null && mins < 120
                 ? ` · in ${mins < 60 ? `${mins}m` : `${Math.floor(mins/60)}h`}` : ''}
             </p>
             <p style={{ fontSize: FontSize.Heading2, fontWeight: FontWeight.Heavy,
-              letterSpacing:'-0.02em', color:'#000' }}>
+              letterSpacing:'-0.02em', color: Text.Inverse }}>
               {brief.bestWindow || '—'}
             </p>
           </div>
@@ -97,7 +97,7 @@ export default function MorningBriefSection({ brief, primaryUser }) {
 
         {/* Avoid window — actionable caution at day level, not per-category */}
         {brief.avoidWindow && (
-          <div style={{ background:'rgba(248,113,113,0.06)', borderRadius: Radius.lg,
+          <div style={{ background:`${Status.Danger}18`, borderRadius: Radius.lg,
             padding:'8px 12px', marginBottom: Space.sm,
             display:'flex', alignItems:'center', gap: Space.sm }}>
             <span style={{ fontSize: FontSize.Body, color: Status.Danger, flexShrink:0 }}>⚠</span>
@@ -111,7 +111,7 @@ export default function MorningBriefSection({ brief, primaryUser }) {
         {/* Family — only when relevant, one line */}
         {brief.familyBrief && (
           <div style={{ display:'flex', alignItems:'center', gap: Space.md, marginTop: Space.sm,
-            padding:'9px 11px', background:'rgba(255,255,255,0.03)', borderRadius: Radius.lg }}>
+            padding:'9px 11px', background:Surface.Subtle, borderRadius: Radius.lg }}>
             <span style={{ fontSize: FontSize.Heading2, flexShrink:0 }}>👨‍👩‍👧</span>
             <p style={{ fontSize: FontSize.Caption, color: Text.Secondary, lineHeight:1.4 }}>
               {brief.familyBrief.energy === 'High'

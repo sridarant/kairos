@@ -1,91 +1,120 @@
 /**
- * colors.js — Semantic colour system
- * All components must import from here. No raw hex anywhere.
+ * colors.js — Semantic colour system (light-first, v30.8)
+ *
+ * ONE source of truth for all colours.
+ * Remove all other colour definitions from: index.css, constants/index.js,
+ * userProfile.js, and any component-level raw hex.
+ *
+ * Design direction: calm, minimal, spacious. Colour signals meaning only.
+ * Not decorative. Not loud.
  */
 
-// ─── Primitives (never used directly in components) ───────────────────────────
+// ─── Primitives ───────────────────────────────────────────────────────────────
+// Never use these directly in components.
 const P = {
-  black:'#000', white:'#fff',
-  gray1:'#111', gray2:'#1a1a1a', gray3:'#2a2a2a', gray4:'#666',
-  yellow:'#facc15',
-  green:'#4ade80', greenBg:'#052e16',
-  red:'#f87171',   redBg:'#1c0505',
-  amber:'#fb923c', amberTxt:'#fbbf24', amberBg:'#1c1000',
+  white:   '#ffffff',
+  gray50:  '#f9fafb',
+  gray100: '#f3f4f6',
+  gray200: '#e5e7eb',
+  gray300: '#d1d5db',
+  gray400: '#9ca3af',
+  gray500: '#6b7280',
+  gray700: '#374151',
+  gray900: '#111827',
+  black:   '#000000',
+
+  // Signal palette — used sparingly, only for meaning
+  emerald500: '#10b981',
+  emerald700: '#047857',
+  amber500:   '#f59e0b',
+  amber700:   '#b45309',
+  red500:     '#ef4444',
+  red700:     '#b91c1c',
+  indigo500:  '#6366f1',
+  indigo600:  '#4f46e5',
 }
 
-// ─── Semantic surface colours ─────────────────────────────────────────────────
+// ─── Surface ──────────────────────────────────────────────────────────────────
 export const Surface = Object.freeze({
-  Background:     P.black,
-  Base:           P.gray1,
-  Card:           P.gray2,
-  CardElevated:   '#1e1e1e',
-  CardSubtle:     '#161616',
-  Line:           P.gray3,
-  Divider:        P.gray3,
-  Overlay:        'rgba(0,0,0,0.7)',
+  Background:  P.gray50,
+  Base:        P.white,
+  Card:        P.white,
+  Subtle:      P.gray100,
+  Line:        P.gray200,
+  Divider:     P.gray200,
+  Overlay:     'rgba(0,0,0,0.45)',
 })
 
-// ─── Semantic text colours ────────────────────────────────────────────────────
+// ─── Text ─────────────────────────────────────────────────────────────────────
 export const Text = Object.freeze({
-  Primary:   P.white,
-  Secondary: P.gray4,
-  Muted:     '#444',
-  Accent:    P.yellow,
-  Inverse:   P.black,
+  Primary:   P.gray900,
+  Secondary: P.gray500,
+  Muted:     P.gray400,
+  Inverse:   P.white,
+  Link:      P.indigo600,
 })
 
-// ─── Semantic status colours ──────────────────────────────────────────────────
+// ─── Status ───────────────────────────────────────────────────────────────────
 export const Status = Object.freeze({
-  Success:     P.green,
-  SuccessBg:   P.greenBg,
-  Warning:     P.amberTxt,
-  WarningBg:   P.amberBg,
-  Danger:      P.red,
-  DangerBg:    P.redBg,
-  Information: '#60a5fa',
-  Highlight:   P.yellow,
-  Caution:     P.amber,
-})
-
-// ─── Confidence colours ───────────────────────────────────────────────────────
-export const Confidence = Object.freeze({
-  High:   P.green,
-  Medium: P.yellow,
-  Low:    P.red,
-})
-
-// ─── Outlook colours ──────────────────────────────────────────────────────────
-export const Outlook = Object.freeze({
-  Positive:    P.green,
-  Neutral:     P.yellow,
-  Challenging: P.red,
-})
-
-// ─── Timeline quality colours ─────────────────────────────────────────────────
-export const Quality = Object.freeze({
-  Excellent:    P.green,
-  Good:         P.yellow,
-  Moderate:     P.amber,
-  'Low energy': P.red,
-})
-
-// ─── Category colours (subtle backgrounds for icons) ─────────────────────────
-export const Category = Object.freeze({
-  career:        '#1e293b',
-  finance:       '#1a1a0a',
-  relationships: '#1f0f0f',
-  health:        '#0a1f0a',
-  learning:      '#0f0f1f',
-  travel:        '#0a1a1f',
-  spiritual:     '#1a0f1a',
-  family:        '#1a1000',
-  communication: '#0a1a2a',
-  default:       P.gray2,
+  Success:   P.emerald500,
+  Danger:    P.red500,
+  Warning:   P.amber500,
+  Caution:   P.amber500,
+  Info:      P.indigo500,
 })
 
 // ─── Accent ───────────────────────────────────────────────────────────────────
-export const Accent = P.yellow
+// One primary accent. Use for interactive elements, primary actions, best windows.
+export const Accent = P.indigo600
 
-// ─── Legacy aliases (keeps existing components working during migration) ───────
-export const CONF_COLOR = Confidence
+// ─── Suitability tiers ───────────────────────────────────────────────────────
+// Map engine suitabilityTier → colour. Used for the day rating only.
+export const Suitability = Object.freeze({
+  Excellent:   P.emerald500,
+  Good:        P.emerald700,
+  Neutral:     P.gray500,
+  Moderate:    P.amber700,
+  Challenging: P.red500,
+})
+
+// ─── Outlook (legacy alias — consumed by dailyBrief adapter) ─────────────────
+export const Outlook = Object.freeze({
+  Positive:    P.emerald500,
+  Neutral:     P.gray500,
+  Challenging: P.red500,
+})
+
+// ─── Timeline quality ─────────────────────────────────────────────────────────
+export const Quality = Object.freeze({
+  Excellent:    P.emerald500,
+  Good:         P.emerald700,
+  Neutral:      P.gray500,
+  Moderate:     P.amber500,
+  'Low energy': P.gray400,
+})
+
+// ─── Confidence ───────────────────────────────────────────────────────────────
+export const Confidence = Object.freeze({
+  High:   P.emerald500,
+  Medium: P.amber500,
+  Low:    P.gray400,
+})
+
+// ─── Profile status ───────────────────────────────────────────────────────────
+export const ProfileStatus = Object.freeze({
+  demo:         P.gray400,
+  incomplete:   P.amber500,
+  basic:        P.amber700,
+  personalised: P.emerald500,
+})
+
+// ─── Legacy aliases ───────────────────────────────────────────────────────────
+// Kept so older components compile without changes during migration.
+export const CONF_COLOR   = Confidence
 export const QUALITY_COLOR = Quality
+
+// ─── Category ────────────────────────────────────────────────────────────────
+// Light theme: subtle tinted backgrounds replaced by plain card surface.
+export const Category = Object.freeze({
+  default: P.white,
+})

@@ -13,12 +13,9 @@ export const PROFILE_STATUS = Object.freeze({
   PERSONALISED: 'personalised'
 })
 
-export const PROFILE_STATUS_COLOR = Object.freeze({
-  demo:         '#f87171',
-  incomplete:   '#fbbf24',
-  basic:        '#facc15',
-  personalised: '#4ade80'
-})
+// Colours live in src/styles/tokens/colors.js → ProfileStatus
+// This re-export keeps legacy callers working during migration.
+export { ProfileStatus as PROFILE_STATUS_COLOR } from '../../styles/tokens/colors.js'
 
 export const PROFILE_STATUS_DESC = Object.freeze({
   demo:         'Displaying demonstration recommendations. Set up your profile for personalised guidance.',

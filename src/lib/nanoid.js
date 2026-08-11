@@ -1,7 +1,7 @@
-// Minimal ID generator — no dependencies
-export function nanoid(size = 12) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  let id = ''
-  for (let i = 0; i < size; i++) id += chars[Math.floor(Math.random() * chars.length)]
-  return id
-}
+/**
+ * /src/lib/nanoid.js — Re-export from canonical lib location.
+ *
+ * The canonical implementation is now at lib/utils/nanoid.js.
+ * This file re-exports it for any remaining src/ callers.
+ */
+export { nanoid } from '../../lib/utils/nanoid.js'

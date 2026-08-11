@@ -140,7 +140,7 @@ export default function ProfileModal({ onClose, identity, onSave, onDelete, onEx
 
   return (
     <>
-      <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)',
+      <div onClick={onClose} style={{ position:'fixed', inset:0, background:Surface.Overlay,
         backdropFilter:'blur(4px)', zIndex:Z.overlay }} />
       <div className="slide-up" style={{
         position:'fixed', left:0, right:0, bottom:0, maxWidth:448, margin:'0 auto',

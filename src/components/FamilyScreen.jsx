@@ -35,7 +35,7 @@ function MemberSwitcher({ members, selected, onSelect }) {
           style={{
             flexShrink:0,
             background: selected === item.id ? Accent : Surface.Card,
-            color:      selected === item.id ? '#000' : Text.Secondary,
+            color:      selected === item.id ? Text.Inverse : Text.Secondary,
             border:'none', borderRadius:Radius.pill,
             padding:`${Space.sm}px ${Space.xl}px`,
             fontSize:FontSize.Body, fontWeight:FontWeight.Bold,
@@ -138,7 +138,7 @@ function FamilyOverview({ brief, daily, dateContext, onMemberSelect, onFetchFutu
         )}
 
         {cautions.length > 0 && (
-          <div style={{ background:'rgba(248,113,113,0.06)', borderRadius:Radius.lg, padding:'9px 12px', marginTop:Space.sm }}>
+          <div style={{ background:`${Status.Danger}18`, borderRadius:Radius.lg, padding:'9px 12px', marginTop:Space.sm }}>
             <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.07em',
               color:Status.Danger, fontWeight:FontWeight.Medium, marginBottom:Space.xs }}>
               Worth Noting
@@ -222,7 +222,7 @@ function IndividualDay({ member, identityMember, dateContext }) {
         </div>
 
         {member.focus && (
-          <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:Radius.lg, padding:'8px 12px', marginBottom:Space.sm }}>
+          <div style={{ background:Surface.Subtle, borderRadius:Radius.lg, padding:'8px 12px', marginBottom:Space.sm }}>
             <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.07em',
               color:Text.Secondary, fontWeight:FontWeight.Medium, marginBottom:Space.xs }}>Today's Focus</p>
             <p style={{ fontSize:FontSize.CardTitle, fontWeight:FontWeight.Bold, color:Text.Primary }}>{member.focus}</p>
@@ -238,7 +238,7 @@ function IndividualDay({ member, identityMember, dateContext }) {
         )}
 
         {member.avoidWindow && (
-          <div style={{ background:'rgba(248,113,113,0.07)', borderRadius:Radius.lg, padding:'8px 12px' }}>
+          <div style={{ background:`${Status.Danger}18`, borderRadius:Radius.lg, padding:'8px 12px' }}>
             <p style={{ fontSize:FontSize.Badge, color:Status.Danger, fontWeight:FontWeight.Bold }}>
               ⚠ Avoid: {member.avoidWindow}
             </p>

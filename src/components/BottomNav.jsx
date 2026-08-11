@@ -14,7 +14,7 @@ export default function BottomNav({ active='today', onToday, onPlanner, onFamily
     <nav aria-label="Main navigation" style={{
       position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)',
       width:'100%', maxWidth:448,
-      background:'rgba(0,0,0,0.96)', backdropFilter:'blur(16px)',
+      background:Surface.Overlay, backdropFilter:'blur(16px)',
       borderTop:`1px solid ${Surface.Line}`,
       paddingTop: Space.sm,
       paddingBottom:`calc(${Space.sm}px + env(safe-area-inset-bottom,0px))`,

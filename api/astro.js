@@ -1,13 +1,13 @@
 /**
- * /api/astro.js  v22.0
- * Orchestration layer: connects Layer 1 (astronomy), Layer 2 (astrology),
- * and Layer 3 (decision engine).
+ * /api/astro.js — DEPRECATED (Sprint 3)
  *
- * This file may call lib/astronomy/ and lib/astrology/ but
- * contains NO astronomical calculations and NO interpretation rules itself.
- * It only ASSEMBLES results.
+ * This file was an orchestration layer for the legacy v22 decision engine.
+ * It is only imported by api/ask.js, which is now deprecated.
+ * No production caller uses this file.
+ *
+ * CLASSIFICATION: LEGACY — safe to remove after api/ask.js confirmed unused.
+ * DO NOT add new imports from this file.
  */
-
 import { toJD, computeGrahaPositions, computeLagna as calcLagna,
          computePanchang, nakshatra }                               from '../lib/astronomy/ephemeris.js'
 import { computeHouses, computePlanetHouses }                       from '../lib/astronomy/houses.js'

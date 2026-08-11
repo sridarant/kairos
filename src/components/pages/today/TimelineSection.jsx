@@ -1,65 +1,54 @@
 /**
- * TimelineSection v30.5
- * Quality reflects actual relative slot scores. No "Ideal conditions" repetition.
- * Shows star count for each slot.
+ * TimelineSection v30.8 — Compact, minimal.
+ *
+ * Three columns per row: time | activity | quality
+ * No coloured dots. No star ratings on every row.
+ * Colour used only on "Excellent" to mark it as the primary window.
  */
 import { memo } from 'react'
-import { SectionTitle, EmptyState } from '../../common/index.jsx'
-import { Surface, Text, Quality as QualityC, Accent, Status, Radius, Space, FontSize, FontWeight } from '../../../styles/tokens/index.js'
+import { Surface, Text, Accent, Status, Quality } from '../../../styles/tokens/index.js'
+import { Space, FontSize, FontWeight } from '../../../styles/tokens/index.js'
 
-const QUALITY_STARS = { Excellent:4, Good:3, Moderate:2, 'Low energy':1 }
-// Quality colors from design tokens — imported via destructured aliases
-// Status.Success = #4ade80, Accent = #facc15, Status.Caution = #fb923c, Status.Danger = #f87171
-const QUALITY_COLOR = {
-  Excellent:    Status.Success,
-  Good:         Accent,
-  Moderate:     Status.Caution,
-  'Low energy': Status.Danger
-}
-
-function Stars({ count }) {
-  return (
-    <span style={{ fontSize:10, letterSpacing:1 }}>
-      {Array.from({length:4},(_,i) => (
-        <span key={i} style={{ opacity: i < count ? 1 : 0.2 }}>★</span>
-      ))}
-    </span>
-  )
+function qualityMarker(q) {
+  if (q === 'Excellent')  return { color: Accent,        label: 'Best' }
+  if (q === 'Good')       return { color: Text.Secondary, label: 'Good' }
+  if (q === 'Low energy') return { color: Status.Danger,  label: 'Low' }
+  return                         { color: Text.Muted,     label: '' }
 }
 
 function TimelineRow({ entry }) {
-  const color  = QUALITY_COLOR[entry.quality] || '#666'
-  const stars  = QUALITY_STARS[entry.quality] || 2
+  const mark = qualityMarker(entry.quality)
   return (
-    <div style={{ position:'relative', marginBottom:Space.md }}>
-      <div style={{ position:'absolute', left:-13, top:5, width:8, height:8,
-        borderRadius:'50%', background:color, border:'2px solid #000' }} />
-      <div style={{ display:'flex', alignItems:'baseline', gap:Space.sm, marginBottom:2 }}>
-        <span style={{ fontSize:FontSize.BodySmall, fontWeight:FontWeight.Bold, color, flexShrink:0 }}>
-          {entry.startTime}{entry.endTime ? `–${entry.endTime}` : ''}
+    <div style={{ display:'grid', gridTemplateColumns:'70px 1fr auto',
+      gap:Space.sm, padding:`${Space.sm}px 0`,
+      borderBottom:`1px solid ${Surface.Line}`,
+      alignItems:'baseline' }}>
+      <span style={{ fontSize:FontSize.Caption, color:Text.Muted, fontVariantNumeric:'tabular-nums' }}>
+        {entry.startTime}
+      </span>
+      <span style={{ fontSize:FontSize.Caption, color:
+        entry.quality === 'Excellent' ? Text.Primary : Text.Secondary,
+        fontWeight: entry.quality === 'Excellent' ? FontWeight.Medium : FontWeight.Regular }}>
+        {entry.label || entry.description}
+      </span>
+      {mark.label && (
+        <span style={{ fontSize:FontSize.Badge, color:mark.color, fontWeight:FontWeight.Medium }}>
+          {mark.label}
         </span>
-        <span style={{ fontSize:FontSize.BodySmall, fontWeight:FontWeight.Medium, color:Text.Primary }}>
-          {entry.label || entry.description}
-        </span>
-        <Stars count={stars} />
-      </div>
+      )}
     </div>
   )
 }
 
 function _TimelineSection({ timeline }) {
-  if (!timeline?.length) return (
-    <section style={{ marginBottom:Space.xs }}>
-      <SectionTitle>Today's Timeline</SectionTitle>
-      <EmptyState icon="⏱" title="Timeline loading…" />
-    </section>
-  )
+  if (!timeline?.length) return null
   return (
-    <section aria-label="Today's Timeline" style={{ marginBottom:Space.xs }}>
-      <SectionTitle>Today's Timeline</SectionTitle>
-      <div style={{ position:'relative', paddingLeft:18 }}>
-        <div style={{ position:'absolute', left:5, top:6, bottom:6,
-          width:2, background:Surface.Line, borderRadius:Radius.sm }} />
+    <section aria-label="Today's Timeline">
+      <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.08em',
+        color:Text.Muted, fontWeight:FontWeight.Medium, marginBottom:Space.md }}>
+        Timeline
+      </p>
+      <div>
         {timeline.map((t,i) => <TimelineRow key={i} entry={t} />)}
       </div>
     </section>

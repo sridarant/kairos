@@ -35,6 +35,7 @@
  */
 
 import { CompositeProvider, SCHEMA_VERSION } from './IdentityRepository.js'
+import { RELEASE_VERSION } from '../../lib/utils/version.js'
 import { deriveProfileStatus }               from '../app/config/userProfile.js'
 
 // ─── Internal: schema helpers ─────────────────────────────────────────────────
@@ -218,7 +219,7 @@ export class IdentityManager {
     return JSON.stringify({
       ...this._identity,
       _exportedAt: new Date().toISOString(),
-      _exportVersion: '30.3.2'
+      _exportVersion: RELEASE_VERSION
     }, null, 2)
   }
 

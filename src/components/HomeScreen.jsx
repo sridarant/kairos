@@ -1,137 +1,231 @@
 /**
- * HomeScreen v30.0 — The Daily Briefing.
- * Context-aware: shows date, user, profile status on every render.
+ * HomeScreen v30.8 — Minimal, light-first Today screen.
+ *
+ * Answers five questions, in order:
+ *   1. How is today?           → DaySummary
+ *   2. What matters most?      → TopGuidance (one card, collapsed list below)
+ *   3. When is the best window?→ DaySummary (best window chip)
+ *   4. What should I watch?    → DaySummary (caution line)
+ *   5. What else?              → expandable guidance list
+ *
+ * Elements removed vs previous version:
+ *   - InstallBanner (moved to AppShell)
+ *   - MorningBriefSection (merged into DaySummary)
+ *   - Duplicate star ratings
+ *   - Repeated time windows
+ *   - Emoji-heavy headers
+ *   - UpcomingSection (moved to Planner)
+ *   - FamilyBriefSection (visible in Family tab; compact link here)
+ *   - This-week section (moved to Planner)
+ *   - TomorrowSection (in context panel only on desktop)
  */
-import { useEffect, useState } from 'react'
-import Logo from './Logo'
-import { GhostButton, Divider, SkeletonHero, SkeletonCard } from './common/index.jsx'
-import DemoBanner  from './common/DemoBanner.jsx'
-import DateHeader  from './common/DateHeader.jsx'
-import { Surface, Text, Status, Radius, Space, FontSize, FontWeight } from '../styles/tokens/index.js'
-import MorningBriefSection   from './pages/today/MorningBriefSection.jsx'
-import RecommendationSection from './pages/today/RecommendationSection.jsx'
-import UpcomingSection       from './pages/today/UpcomingSection.jsx'
-import ThisWeekSection       from './pages/today/ThisWeekSection.jsx'
-import TimelineSection       from './pages/today/TimelineSection.jsx'
-import FamilyBriefSection    from './pages/today/FamilyBriefSection.jsx'
-import TomorrowSection       from './pages/today/TomorrowSection.jsx'
-import DiagnosticsPanel      from './pages/today/DiagnosticsPanel.jsx'
+import { useState, useEffect } from 'react'
+import { Accent, Surface, Text, Suitability, Status, Outlook as OutlookC } from '../styles/tokens/index.js'
+import { Space, FontSize, FontWeight, Radius, Pad } from '../styles/tokens/index.js'
+import { PROFILE_STATUS_COLOR } from '../app/config/userProfile.js'
+import { minsUntilWindow } from '../lib/utils.js'
+import { SkeletonHero, SkeletonCard, EmptyState } from './common/index.jsx'
+import RecommendationRow from './cards/RecommendationRow.jsx'
 
-function Header({ primaryUser, onProfileOpen, onInvite }) {
+// ── Loading ───────────────────────────────────────────────────────────────────
+
+function Loading() {
   return (
-    <header style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-      paddingTop:'calc(10px + env(safe-area-inset-top,0px))', paddingBottom: Space.md }}>
-      <div style={{ display:'flex', alignItems:'center', gap: Space.sm }}>
-        <Logo />
-        <span style={{ fontSize: FontSize.Heading3, fontWeight: FontWeight.Bold,
-          letterSpacing:'-0.01em', color: Text.Primary }}>Kairos</span>
-      </div>
-      <div style={{ display:'flex', gap: Space.sm }}>
-        <GhostButton onClick={onInvite}>Share</GhostButton>
-        <GhostButton onClick={onProfileOpen}>
-          {primaryUser?.name ? `👤 ${primaryUser.name.split(' ')[0]}` : '+ Set up'}
-        </GhostButton>
-      </div>
-    </header>
+    <div style={{ padding:`${Space['3xl']}px ${Space.xl}px` }}>
+      <SkeletonHero />
+      <SkeletonCard lines={2} />
+      <SkeletonCard lines={3} />
+    </div>
   )
 }
 
-function ErrorState({ onRetry }) {
+// ── Demo banner ───────────────────────────────────────────────────────────────
+
+function SetupPrompt({ onSetup }) {
   return (
-    <div style={{ textAlign:'center', padding:'40px 16px' }}>
-      <p style={{ fontSize:32, marginBottom: Space.md }}>⚠️</p>
-      <p style={{ fontSize: FontSize.CardTitle, fontWeight: FontWeight.Bold,
-        color: Text.Primary, marginBottom: Space.sm }}>
-        Couldn't load guidance
+    <div style={{ padding:`${Space.md}px ${Space.xl}px`,
+      borderBottom:`1px solid ${Surface.Line}`, display:'flex',
+      alignItems:'center', justifyContent:'space-between' }}>
+      <p style={{ fontSize:FontSize.Caption, color:Text.Secondary }}>
+        Showing example guidance
       </p>
-      <p style={{ fontSize: FontSize.Caption, color: Text.Secondary, marginBottom: Space.xl }}>
-        Please check your connection and try again.
-      </p>
-      <button onClick={onRetry} style={{
-        background: Surface.Card, border:'none', borderRadius: Radius.button,
-        color: Text.Primary, fontSize: FontSize.Body, fontWeight: FontWeight.Bold,
-        padding:'12px 24px', cursor:'pointer', fontFamily:'inherit' }}>
-        Try Again
+      <button onClick={onSetup}
+        style={{ fontSize:FontSize.Caption, color:Accent, fontWeight:FontWeight.Bold,
+          background:'none', border:'none', cursor:'pointer', padding:'4px 0' }}>
+        Set up profile →
       </button>
     </div>
   )
 }
 
-function InstallBanner({ onDismiss }) {
-  function install() {
-    window.__installPrompt?.prompt()
-    window.__installPrompt?.userChoice?.then(() => { window.__installPrompt = null; onDismiss() })
-  }
+// ── Day summary hero ──────────────────────────────────────────────────────────
+
+function DaySummary({ brief, dateContext }) {
+  const [mins, setMins] = useState(() => minsUntilWindow(brief?.bestWindow))
+  useEffect(() => {
+    const t = setInterval(() => setMins(minsUntilWindow(brief?.bestWindow)), 60_000)
+    return () => clearInterval(t)
+  }, [brief?.bestWindow])
+
+  if (!brief) return null
+
+  const tier     = brief.suitabilityTier || 'Neutral'
+  const tierColor = Suitability[tier] || Text.Secondary
+  const stars     = brief.stars || 3
+
   return (
-    <div style={{ background: Surface.Card, borderRadius: Radius.card, padding:'11px 14px',
-      marginBottom: Space.sm, display:'flex', alignItems:'center', gap: Space.md }}>
-      <div style={{ flex:1 }}>
-        <p style={{ fontSize: FontSize.CardTitle, fontWeight: FontWeight.Bold,
-          marginBottom:2, color: Text.Primary }}>Add Kairos to your home screen</p>
-        <p style={{ fontSize: FontSize.Caption, color: Text.Secondary }}>Your daily briefing in one tap</p>
+    <div style={{ padding:`${Space['3xl']}px ${Space.xl}px ${Space.xl}px` }}>
+      {/* Date */}
+      <p style={{ fontSize:FontSize.Caption, color:Text.Secondary, marginBottom:Space.xs }}>
+        {dateContext?.fullDate || ''}
+      </p>
+
+      {/* Day rating — typography-led, no card */}
+      <div style={{ marginBottom:Space.xl }}>
+        <div style={{ display:'flex', alignItems:'baseline', gap:Space.md, marginBottom:Space.sm }}>
+          <span style={{ fontSize:44, fontWeight:FontWeight.Heavy, color:tierColor, lineHeight:1 }}>
+            {stars}
+          </span>
+          <span style={{ fontSize:FontSize.Heading2, fontWeight:FontWeight.Bold, color:tierColor }}>
+            {tier}
+          </span>
+        </div>
+        {brief.theme && (
+          <p style={{ fontSize:FontSize.Body, color:Text.Secondary, marginBottom:0 }}>
+            {brief.theme}
+          </p>
+        )}
       </div>
-      <GhostButton onClick={install}>Install</GhostButton>
-      <button onClick={onDismiss} aria-label="Dismiss" style={{ background:'none', border:'none',
-        color: Text.Secondary, fontSize: FontSize.Heading2, cursor:'pointer', minHeight:32, padding:`0 ${Space.xs}px` }}>✕</button>
+
+      {/* Best window + caution — two chips */}
+      <div style={{ display:'flex', flexWrap:'wrap', gap:Space.sm }}>
+        {brief.bestWindow && (
+          <div style={{ display:'inline-flex', alignItems:'center', gap:Space.xs,
+            background:Surface.Subtle, borderRadius:Radius.pill,
+            padding:`6px ${Space.md}px` }}>
+            <span style={{ fontSize:12, color:Accent }}>●</span>
+            <span style={{ fontSize:FontSize.Caption, color:Text.Primary, fontWeight:FontWeight.Medium }}>
+              {brief.bestWindow}
+            </span>
+            {mins != null && (
+              <span style={{ fontSize:FontSize.Badge, color:Text.Secondary }}>
+                in {mins}m
+              </span>
+            )}
+          </div>
+        )}
+        {brief.avoidWindow && (
+          <div style={{ display:'inline-flex', alignItems:'center', gap:Space.xs,
+            background:Surface.Subtle, borderRadius:Radius.pill,
+            padding:`6px ${Space.md}px` }}>
+            <span style={{ fontSize:12, color:Status.Danger }}>⚠</span>
+            <span style={{ fontSize:FontSize.Caption, color:Text.Secondary }}>
+              Avoid {brief.avoidWindow}
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
-function LoadingSkeleton() {
-  return <><SkeletonHero /><SkeletonCard lines={3} /><SkeletonCard lines={2} /><SkeletonCard lines={2} /></>
-}
+// ── Top guidance ──────────────────────────────────────────────────────────────
 
-export default function HomeScreen({
-  brief, recommendationPackages, timeline, weeklyPlan, opportunities, diagnostics,
-  daily, loading, status, primaryUser, profileStatus, dateContext,
-  onProfileOpen, onInvite, onFamilyPlan, onFetchFuture, onReturnToday, onFeedback,
-  showTimeline = true
-}) {
-  const [showInstall, setShowInstall] = useState(false)
-  useEffect(() => {
-    const h = () => setShowInstall(true)
-    window.addEventListener('installable', h)
-    return () => window.removeEventListener('installable', h)
-  }, [])
+function TopGuidance({ packages, onFeedback }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!packages?.length) return null
 
-  const isError = status === 'error'
+  const top   = packages[0]                  // one primary recommendation
+  const caution = packages.find(p => p.quality === 'caution' || p.stars <= 1)
+  const rest  = packages.slice(1).filter(p => p !== caution)
 
   return (
-    <main style={{ padding:`0 ${Space.xl}px`, overflowX:'hidden', paddingBottom: Space.sm }}>
-      <Header primaryUser={primaryUser} onProfileOpen={onProfileOpen} onInvite={onInvite} />
-      {showInstall && <InstallBanner onDismiss={() => setShowInstall(false)} />}
+    <div style={{ padding:`0 ${Space.xl}px` }}>
+      {/* Divider label */}
+      <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.08em',
+        color:Text.Muted, fontWeight:FontWeight.Medium, marginBottom:Space.md }}>
+        What matters most
+      </p>
 
-      {/* WS6: Demo/profile status banner */}
-      <DemoBanner profileStatus={profileStatus} onSetupProfile={onProfileOpen} />
+      {/* Primary recommendation */}
+      <RecommendationRow pkg={top} primary onFeedback={onFeedback} />
 
-      {/* WS3: Always-visible date context */}
-      <DateHeader dateContext={dateContext} primaryUser={primaryUser}
-        profileStatus={profileStatus} onReturnToday={onReturnToday} />
+      {/* Caution — if different from top */}
+      {caution && caution !== top && (
+        <RecommendationRow pkg={caution} caution onFeedback={onFeedback} />
+      )}
 
-      {import.meta.env.DEV && <DiagnosticsPanel diagnostics={diagnostics} />}
-
-      {loading  && <LoadingSkeleton />}
-      {isError  && <ErrorState onRetry={() => onFetchFuture(0)} />}
-      {!loading && !isError && (
+      {/* Expand button */}
+      {rest.length > 0 && (
         <>
-          <MorningBriefSection brief={brief} primaryUser={primaryUser} />
-          <RecommendationSection packages={recommendationPackages} onFeedback={onFeedback} />
-          <Divider />
-          <UpcomingSection opportunities={opportunities} weeklyPlan={weeklyPlan} onFetchFuture={onFetchFuture} />
-          <ThisWeekSection weeklyPlan={weeklyPlan} onFetchFuture={onFetchFuture} />
-          <Divider />
-          {showTimeline && <TimelineSection timeline={timeline} />}
-          <FamilyBriefSection brief={brief} daily={daily} onFamilyPlan={onFamilyPlan} />
-          <TomorrowSection brief={brief} onFetchFuture={onFetchFuture} />
-          <div style={{ textAlign:'center', padding:`${Space.xl}px 0 ${Space.sm}px`,
-            borderTop:`1px solid ${Surface.Line}`, marginTop: Space.xl }}>
-            <p style={{ fontSize: FontSize.Label, color: Surface.Line,
-              letterSpacing:'0.07em', textTransform:'uppercase' }}>
-              Kairos · Life Planning Companion
-            </p>
-          </div>
+          {expanded && rest.map((p,i) => (
+            <RecommendationRow key={p.id||i} pkg={p} onFeedback={onFeedback} />
+          ))}
+          <button onClick={() => setExpanded(v=>!v)}
+            style={{ width:'100%', padding:`${Space.md}px 0`,
+              background:'none', border:'none', cursor:'pointer',
+              fontSize:FontSize.BodySmall, color:Text.Secondary,
+              fontFamily:'inherit', textAlign:'left', marginTop:Space.sm }}>
+            {expanded
+              ? '↑ Show fewer'
+              : `↓ ${rest.length} more guidance areas`}
+          </button>
         </>
       )}
-    </main>
+    </div>
+  )
+}
+
+// ── Family cross-link ─────────────────────────────────────────────────────────
+
+function FamilyLink({ brief, onFamilyPlan }) {
+  const fa = brief?.familyBrief
+  if (!fa?.bestWindow) return null
+  return (
+    <div style={{ padding:`${Space.xl}px`, borderTop:`1px solid ${Surface.Line}`,
+      display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+      <div>
+        <p style={{ fontSize:FontSize.Caption, color:Text.Muted, marginBottom:2 }}>Family</p>
+        <p style={{ fontSize:FontSize.BodySmall, color:Text.Primary }}>
+          Best together: <strong>{fa.bestWindow}</strong>
+        </p>
+      </div>
+      <button onClick={onFamilyPlan}
+        style={{ fontSize:FontSize.Caption, color:Accent, fontWeight:FontWeight.Bold,
+          background:'none', border:'none', cursor:'pointer', padding:'4px 0' }}>
+        View →
+      </button>
+    </div>
+  )
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
+
+export default function HomeScreen({
+  brief, recommendationPackages, timeline, weeklyPlan, opportunities,
+  daily, loading, status, primaryUser, profileStatus, dateContext,
+  diagnostics, onProfileOpen, onInvite, onFamilyPlan,
+  onFetchFuture, onReturnToday, onFeedback,
+  showTimeline = true
+}) {
+  if (loading) return <Loading />
+  if (!brief && !recommendationPackages?.length) return (
+    <div style={{ padding:`${Space['3xl']}px ${Space.xl}px` }}>
+      <EmptyState icon="☀" title="Preparing your day" body="Calculating your personalised guidance…" />
+    </div>
+  )
+
+  const showSetup = profileStatus === 'demo' || profileStatus === 'incomplete'
+
+  return (
+    <div style={{ minHeight:'100%', background:Surface.Background }}>
+      {showSetup && <SetupPrompt onSetup={onProfileOpen} />}
+
+      <DaySummary brief={brief} dateContext={dateContext} />
+
+      <TopGuidance packages={recommendationPackages} onFeedback={onFeedback} />
+
+      <FamilyLink brief={brief} onFamilyPlan={onFamilyPlan} />
+    </div>
   )
 }

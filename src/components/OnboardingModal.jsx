@@ -212,7 +212,7 @@ export default function OnboardingModal({ onComplete, onSkip }) {
 
   return (
     <>
-      <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)',
+      <div style={{ position:'fixed', inset:0, background:Surface.Overlay,
         backdropFilter:'blur(6px)', zIndex:Z.overlay }} />
       <div className="slide-up" style={{
         position:'fixed', inset:0, display:'flex', alignItems:'center', justifyContent:'center',

@@ -26,7 +26,7 @@ function SideNav({ active, onSelect, profileStatus, primaryUser }) {
   return (
     <div style={{ width:200, flexShrink:0, position:'sticky', top:0, height:'100vh',
       display:'flex', flexDirection:'column', padding:`${Space['3xl']}px ${Space.xl}px`,
-      borderRight:`1px solid ${Surface.Line}`, background:Surface.Base }}>
+      borderRight:`1px solid ${Surface.Line}`, background:Surface.Base, overflowY:'auto' }}>
       <div style={{ display:'flex', alignItems:'center', gap:Space.sm, marginBottom:Space['3xl'] }}>
         <Logo />
         <span style={{ fontSize:FontSize.CardTitle, fontWeight:FontWeight.Bold, color:Text.Primary }}>Kairos</span>
@@ -49,13 +49,13 @@ function SideNav({ active, onSelect, profileStatus, primaryUser }) {
             aria-current={active === item.id ? 'page' : undefined}
             style={{ width:'100%', display:'flex', alignItems:'center', gap:Space.md,
               padding:`${Space.sm}px ${Space.md}px`, marginBottom:Space.xs,
-              background: active === item.id ? `${Accent}18` : 'none',
+              background: active === item.id ? Surface.Subtle : 'none',
               border:'none', borderRadius:Radius.md, cursor:'pointer', fontFamily:'inherit',
               textAlign:'left', minHeight:40,
-              borderLeft: active === item.id ? `3px solid ${Accent}` : '3px solid transparent' }}>
+              borderLeft:'3px solid transparent' }}>
             <span style={{ fontSize:18 }}>{item.icon}</span>
             <span style={{ fontSize:FontSize.Body,
-              color: active === item.id ? Accent : Text.Secondary,
+              color: active === item.id ? Text.Primary : Text.Secondary,
               fontWeight: active === item.id ? FontWeight.Bold : 400 }}>
               {item.label}
             </span>

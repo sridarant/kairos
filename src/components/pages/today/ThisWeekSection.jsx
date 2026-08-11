@@ -50,7 +50,7 @@ export default function ThisWeekSection({ weeklyPlan, onFetchFuture }) {
 
       {weeklyPlan.challenging && (
         <div style={{ display:'flex', alignItems:'center', gap: Space.md, marginTop: Gap.card,
-          background:'rgba(248,113,113,0.07)', borderRadius: Radius.card, padding:'10px 12px' }}>
+          background:`${Status.Danger}18`, borderRadius: Radius.card, padding:'10px 12px' }}>
           <div style={{ flex:1 }}>
             <p style={{ fontSize: FontSize.Caption, color: Status.Danger, fontWeight: FontWeight.Medium,
               marginBottom: 2, textTransform:'uppercase', letterSpacing:'0.07em' }}>

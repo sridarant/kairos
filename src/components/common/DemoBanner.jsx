@@ -47,7 +47,7 @@ export default function DemoBanner({ profileStatus, onSetupProfile }) {
         <button onClick={onSetupProfile} style={{
           background: color, border:'none', borderRadius: Radius.md,
           padding:'6px 12px', fontSize: FontSize.Caption, fontWeight: FontWeight.Bold,
-          color: '#000', cursor:'pointer', fontFamily:'inherit', flexShrink:0, minHeight:32,
+          color: Text.Inverse, cursor:'pointer', fontFamily:'inherit', flexShrink:0, minHeight:32,
           whiteSpace:'nowrap'
         }}>
           {msg.cta}

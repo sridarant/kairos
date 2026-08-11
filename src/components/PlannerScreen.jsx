@@ -14,28 +14,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { SectionTitle, StarRating, ConfidenceBadge, TabButton, EmptyState, GhostButton } from './common/index.jsx'
 import { Surface, Text, Status, Accent, Radius, Space, Pad, Gap, FontSize, FontWeight } from '../styles/tokens/index.js'
 import { buildDateContext } from '../app/bootstrap/BootstrapManager.js'
+import { adaptHorizonDay, adaptHorizonDays } from '../../lib/adapters/PlannerHorizonAdapter.js'
 
-/**
- * normaliseDayData — converts raw /api/daily response fields to camelCase.
- * PlannerScreen calls fetchHorizon() directly, bypassing the adapter layer.
- * This local normaliser bridges that gap without requiring a full adapter.
- * WS11: documented exception, tracked in KNOWN_LIMITATIONS.md.
- */
-function normaliseDayData(raw) {
-  if (!raw) return raw
-  const prim = raw.members?.[0] || {}
-  return {
-    ...raw,
-    daysAhead:    raw.daysAhead,
-    goldenWindow: prim.golden_window || raw.golden_window || null,
-    avoidWindow:  prim.avoid_window  || raw.avoid_window  || null,
-    members: (raw.members || []).map(m => ({
-      ...m,
-      goldenWindow: m.golden_window || null,
-      avoidWindow:  m.avoid_window  || null
-    }))
-  }
-}
+// Sprint 3: normaliseDayData removed. Use adaptHorizonDay/adaptHorizonDays from PlannerHorizonAdapter.
 
 // Fetch multi-day plan data
 async function fetchHorizon(users, days) {
@@ -46,7 +27,7 @@ async function fetchHorizon(users, days) {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ users: users || [], daysAhead: i })
       })
-      if (res.ok) results.push(normaliseDayData({ daysAhead:i, ...(await res.json()) }))
+      if (res.ok) results.push(adaptHorizonDay({ ...(await res.json()) }, i))
     } catch { /* skip failed day */ }
   }
   return results
@@ -139,7 +120,7 @@ function SelectedDayDetail({ dayData, onBack }) {
         </div>
       )}
       {avoid && (
-        <div style={{ background:'rgba(248,113,113,0.07)', borderRadius:Radius.lg,
+        <div style={{ background:`${Status.Danger}18`, borderRadius:Radius.lg,
           padding:'8px 12px', marginBottom:Space.md }}>
           <p style={{ fontSize:FontSize.Badge, color:Status.Danger, fontWeight:FontWeight.Bold }}>
             ⚠ Avoid: {avoid}
@@ -287,11 +268,23 @@ export default function PlannerScreen({ weeklyPlan, opportunities, daily, dateCo
   const mergedData = useMemo(() => {
     const wk = (daily?.week_plan || []).filter(d => d.days_ahead > 0)
     const horizon = horizonData.filter(d => d.daysAhead > 7)
-    const wkMapped = wk.map(d => normaliseDayData({ daysAhead:d.days_ahead, stars:d.stars,
-      goldenWindow: null, avoidWindow: null,
-      members:[{ stars:d.stars, goldenWindow: null, avoidWindow: null,
-        confidence:d.confidence >= 70 ? 'High' : d.confidence >= 50 ? 'Medium' : 'Low',
-        focus: d.summary }] }))
+    const wkMapped = wk.map(d => adaptHorizonDay({
+      stars:           d.stars,
+      suitabilityScore:d.suitabilityScore,
+      suitabilityTier: d.suitabilityTier,
+      golden_window:   d.golden_window || null,
+      avoid_window:    d.avoid_window  || null,
+      decision:        d.decision || 'WAIT',
+      focus:           d.theme || d.summary || null,
+      members:[{
+        stars:           d.stars,
+        suitabilityScore:d.suitabilityScore,
+        suitabilityTier: d.suitabilityTier,
+        golden_window:   null,
+        confidence:      d.confidence || 'Medium',
+        focus:           d.theme || d.summary || null
+      }]
+    }, d.days_ahead))
     return [...wkMapped, ...horizon].sort((a,b) => a.daysAhead - b.daysAhead)
   }, [daily, horizonData])
 
@@ -318,7 +311,7 @@ export default function PlannerScreen({ weeklyPlan, opportunities, daily, dateCo
         {[7, 14].map(d => (
           <button key={d} onClick={() => setHorizonDays(d)} style={{
             background: horizonDays === d ? Accent : Surface.Card,
-            color: horizonDays === d ? '#000' : Text.Secondary,
+            color: horizonDays === d ? Text.Inverse : Text.Secondary,
             border:'none', borderRadius:Radius.pill, padding:`6px 16px`,
             fontSize:FontSize.Caption, fontWeight:FontWeight.Bold,
             cursor:'pointer', fontFamily:'inherit', minHeight:32 }}>

@@ -1,3 +1,12 @@
+/**
+ * /api/engine.js — DEPRECATED (Sprint 3)
+ *
+ * This file contains SLOTS/PLANETS constants from the v22 legacy engine.
+ * No file currently imports from it (confirmed by grep).
+ *
+ * CLASSIFICATION: DEAD — not imported by any production or test code.
+ * DO NOT add new imports from this file.
+ */
 // ─── Base time slots ──────────────────────────────────────────────────────────
 export const SLOTS = [
   { time: '07:00–09:00', decision: 1,  communication: 1,  risk: 0,  focus: 1  },

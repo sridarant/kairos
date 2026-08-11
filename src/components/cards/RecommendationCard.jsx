@@ -90,7 +90,7 @@ export default function RecommendationCard({ pkg, onFeedback }) {
               <div style={{ display:'flex', gap:Space.sm, flexWrap:'wrap' }}>
                 {[['helpful','✓ Worked well'],['not_helpful','Not quite'],['skipped','Skip']].map(([v,l])=>(
                   <button key={v} onClick={e=>act(e,v)} style={{
-                    background:'rgba(255,255,255,0.05)', border:'none', borderRadius:Radius.sm,
+                    background:Surface.Subtle, border:'none', borderRadius:Radius.sm,
                     padding:`6px 10px`, fontSize:FontSize.Caption, color:Text.Secondary,
                     cursor:'pointer', fontFamily:'inherit', fontWeight:FontWeight.Medium, minHeight:32 }}>
                     {l}

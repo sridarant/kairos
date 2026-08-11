@@ -3,7 +3,7 @@
  * Import from here everywhere: import { Color, Space, Radius } from '@/styles/tokens'
  * Never import from individual token files in components.
  */
-export { Surface, Text, Status, Confidence, Outlook, Quality, Category, Accent, CONF_COLOR, QUALITY_COLOR } from './colors.js'
+export { Surface, Text, Status, Confidence, Outlook, Quality, Category, Accent, Suitability, ProfileStatus, CONF_COLOR, QUALITY_COLOR } from './colors.js'
 export { FontSize, FontWeight, LetterSpacing, LineHeight, TextStyle } from './typography.js'
 export { Space, Pad, Gap } from './spacing.js'
 export { Radius } from './radius.js'

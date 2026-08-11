@@ -84,7 +84,7 @@ export default function BirthTimeInput({ value = '', onChange, placeholder = 'HH
         <button key={v} onClick={() => handleAmpm(v)} type="button"
           style={{
             background: ampm === v ? Accent : Surface.Card,
-            color: ampm === v ? '#000' : Text.Secondary,
+            color: ampm === v ? Text.Inverse : Text.Secondary,
             border:`1px solid ${Surface.Line}`,
             borderLeft: 'none',
             borderRadius: v === 'PM' ? `0 ${Radius.input}px ${Radius.input}px 0` : '0',
