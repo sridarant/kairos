@@ -13,7 +13,6 @@ import { useState, useMemo } from 'react'
 import {
   SectionTitle, StarRating, ConfidenceBadge, EmptyState, GhostButton
 } from './common/index.jsx'
-import { computeFamilyOverlap } from '../../lib/planning/familyOverlap.js'
 import {
   Surface, Text, Status, Accent, Radius, Space, Pad, Gap, FontSize, FontWeight
 } from '../styles/tokens/index.js'
@@ -76,12 +75,20 @@ function MemberCompactCard({ member, idx, onSelect }) {
 function FamilyOverview({ brief, daily, members, dateContext, onMemberSelect, onFetchFuture }) {
   const fa  = daily?.family_alignment
   const fb  = brief?.familyBrief
-  // P0-07 / canonical: compute actual slot-level overlap from engine data
+  // P0-3/P0-4: Use the pre-computed family_overlap DTO from the API.
+  // The calculation happens in api/daily.js (buildFamilyDTO) via lib/planning/familyOverlap.js.
+  // React does NOT call the calculation engine.
   const apiMembers = (members || daily?.members || []).filter(m => m.name)
-  const membersWithSlots = apiMembers.map(m => ({
-    name: m.name, scoredSlots: m.scoredSlots || []
-  }))
-  const overlap = computeFamilyOverlap(membersWithSlots)
+  const overlap = daily?.family_overlap || {
+    bestSharedWindow: fa?.bestSharedWindow || fb?.bestWindow || null,
+    overlapType:      fa?.overlapType || 'none',
+    overlapMembers:   fa?.overlapMembers || [],
+    hasSharedWindow:  !!(fa?.bestSharedWindow || fb?.bestWindow),
+    explanation:      null,
+    pairwiseOverlap:  [],
+    recommended:      fa?.recommended || [],
+    avoid:            fa?.avoid || [],
+  }
 
   // Legacy fields for backward compatibility
   const activities  = (fa?.recommended || fb?.activities || []).slice(0, 3)

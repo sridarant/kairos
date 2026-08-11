@@ -14,7 +14,8 @@ import { resolveBirthLocation, locationIsPersonalised } from '../lib/astronomy/b
 import { buildAstroContext }                from '../lib/astrology/index.js'
 import { buildDecisionObject, buildFamilyDecisionObject } from '../lib/decision/engine.js'
 import { CALC_VERSION } from '../lib/utils/version.js'
-import { buildDailyInsight, buildWindowMap } from '../lib/models/DailyInsight.js'
+import { computeFamilyOverlap } from '../lib/planning/familyOverlap.js'
+import { buildDailyInsight, buildWindowMap, validateDailyInsight } from '../lib/models/DailyInsight.js'
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
@@ -196,28 +197,135 @@ function buildResponse(targetDate, users, feedbackAdj) {
   const weekPlan = buildWeekPlan(targetDate, primaryChart, primaryDob, primarySeed)
   const primary  = members[0]
 
-  return {
-    // Day-level summary
-    golden_window:      primary.golden_window,
-    avoid_window:       primary.avoid_window,
-    confidence_summary: primary.confidence,
-    focus:              primary.focus,
-    stars:              primary.stars,
-    // Astrology context (for display only)
+  // P0-1/P0-2: Build canonical DailyInsight for the primary user.
+  // The API serializes this to the DTO; no parallel representation.
+  const primaryMemberModel = userModels[0] || null
+  const primaryInsight = buildDailyInsight({
+    profileId:       primaryMemberModel?.name || 'anonymous',
+    name:            primaryMemberModel?.name || null,
+    date:            targetDate.toISOString().slice(0, 10),
+    timezone:        primaryMemberModel?.timezone || 'UTC',
+    generatedAt:     new Date().toISOString(),
+    decisionObj:     buildDecisionObject(
+      buildAstroContext(
+        astroData,
+        primaryChart,
+        primaryDob,
+        0,
+        targetDate
+      ),
+      primarySeed,
+      0
+    ),
+    resolvedLocation: primaryLocation,
+    familyAlignment,
+    weekPlan,
+  })
+
+  // Build DailyInsight for each family member
+  const memberInsights = members.map((m, idx) => {
+    const u        = userModels[idx]
+    const location = u ? resolveBirthLocation(u.place_of_birth, u.timezone) : primaryLocation
+    return {
+      // Core member fields
+      name:            m.name,
+      decision:        m.decision,
+      confidence:      m.confidence,
+      confidenceScore: m.confidenceScore,
+      stars:           m.stars,
+      suitabilityScore:m.suitabilityScore,
+      suitabilityTier: m.suitabilityTier,
+      focus:           m.focus,
+      golden_window:   m.golden_window,
+      avoid_window:    m.avoid_window,
+      summary:         m.summary,
+      recommendations: m.recommendations,
+      timeline:        m.timeline,
+      windows:         m.windows,
+      scoredSlots:     m.scoredSlots,
+      _reasoningResult:m._reasoningResult,
+      locationStatus:  m.locationStatus,
+      dasha:           m.dasha,
+      yoga:            m.yoga,
+    }
+  })
+
+  // P0-4: Family DTO — compute overlap explanation using lib (not UI)
+  const familyOverlapDTO = familyAlignment
+    ? buildFamilyDTO(familyAlignment, memberInsights)
+    : null
+
+  // Serialize DailyInsight to the canonical API DTO
+  // Primary insight fields flow through, plus member-level data for family views
+  const dto = {
+    // P0-2: Core fields from primary DailyInsight
+    overall:          primaryInsight.overall,
+    theme:            primaryInsight.theme,
+    windows:          primaryInsight.windows,
+    domains:          primaryInsight.domains,
+    recommendations:  primaryInsight.recommendations,
+    signals:          primaryInsight.signals,
+    timeline:         primaryInsight.timeline,
+
+    // Panchang context (display only)
     planet:    astroData.panchang?.vara?.name || null,
     nakshatra: astroData.panchang?.nakshatra?.name || null,
     tithi:     astroData.panchang?.tithi?.index || null,
-    // Members and family
-    members,
+
+    // Family members (for FamilyScreen)
+    members:          memberInsights,
     family_alignment: familyAlignment,
+    family_overlap:   familyOverlapDTO,  // P0-4: explicit family DTO
     week_plan:        weekPlan,
-    // Constitution §12: every response carries version + timestamp for traceability
+
+    // Legacy fields kept for backward compat with existing adapters
+    golden_window:      primaryInsight.overall.goldenWindow,
+    avoid_window:       primaryInsight.overall.avoidWindow,
+    confidence_summary: primaryInsight.overall.confidenceTier,
+    focus:              primaryInsight.theme,
+    stars:              primaryInsight.overall.stars,
+
+    // P0-8: explicit suitability fields (never confused with confidence)
+    suitabilityScore:   primaryInsight.overall.suitabilityScore,
+    suitabilityTier:    primaryInsight.overall.suitabilityTier,
+
+    // Metadata
     _meta: {
       calculationVersion: CALC_VERSION,
-      generatedAt:        new Date().toISOString(),
-      targetDate:         targetDate.toISOString().slice(0, 10),
-      locationStatus:     primaryLocation?.status || 'unresolved'
+      generatedAt:        primaryInsight.generatedAt,
+      targetDate:         primaryInsight.date,
+      locationStatus:     primaryInsight.locationStatus,
+      profileId:          primaryInsight.profileId,
     }
+  }
+
+  return dto
+}
+
+/**
+ * buildFamilyDTO — P0-4: canonical Family DTO with explanation.
+ * Computes the overlap explanation from the lib layer, not the UI.
+ */
+function buildFamilyDTO(familyAlignment, members) {
+  // Run overlap computation using scoredSlots from member data
+  const membersWithSlots = members.map(m => ({
+    name: m.name,
+    scoredSlots: m.scoredSlots || []
+  }))
+  const overlapResult = computeFamilyOverlap(membersWithSlots)
+
+  return {
+    harmonyScore:    familyAlignment.harmonyScore,
+    stars:           familyAlignment.stars,
+    confidence:      familyAlignment.confidence,
+    bestSharedWindow:overlapResult.bestSharedWindow || familyAlignment.bestSharedWindow,
+    overlapType:     overlapResult.overlapType || familyAlignment.overlapType,
+    overlapMembers:  overlapResult.overlapMembers || familyAlignment.overlapMembers,
+    hasSharedWindow: overlapResult.hasSharedWindow || familyAlignment.hasSharedWindow,
+    explanation:     overlapResult.explanation,  // grounded text from lib, not UI
+    pairwiseOverlap: overlapResult.pairwiseOverlap || [],
+    recommended:     familyAlignment.recommended || [],
+    avoid:           familyAlignment.avoid || [],
   }
 }
 
