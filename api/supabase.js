@@ -58,3 +58,9 @@ export function getSupabase() {
 // ALTER TABLE kairos_users ENABLE ROW LEVEL SECURITY;
 // CREATE POLICY "allow_all" ON kairos_users FOR ALL USING (true);
 // (repeat for other tables)
+//
+// SECURITY NOTE: The "allow_all USING (true)" above is a placeholder ONLY.
+// For production, replace with user-scoped RLS:
+//   CREATE POLICY "user_data_isolation" ON user_data
+//   FOR ALL USING (user_id = current_setting('request.jwt.claims')::json->>'sub');
+// Or use the service_role key server-side with explicit user_id checks in the API.

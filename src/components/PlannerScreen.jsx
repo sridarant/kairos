@@ -13,6 +13,7 @@
  */
 import { useState, useEffect, useMemo } from 'react'
 import { ACTIVITY_TYPES, planActivity } from '../../lib/planning/activityPlanner.js'
+import { adaptHorizonDay } from '../../lib/adapters/PlannerHorizonAdapter.js'
 import { Surface, Text, Accent, Status } from '../styles/tokens/index.js'
 import { Space, FontSize, FontWeight, Radius } from '../styles/tokens/index.js'
 import { EmptyState } from './common/index.jsx'
@@ -36,8 +37,9 @@ async function fetchHorizon(users, days) {
         body: JSON.stringify({ users:users||[], daysAhead:i, calculationDate })
       })
       if (res.ok) {
-        const d = await res.json()
-        results.push({ daysAhead:i, date:calculationDate, ...d })
+        const raw = await res.json()
+        // DTO boundary: adapt raw API response through canonical adapter
+        results.push(adaptHorizonDay({ ...raw, daysAhead:i, date:calculationDate }, i))
       }
     } catch { /* skip failed days */ }
   }
@@ -74,11 +76,11 @@ function ActivitySelector({ selected, onSelect }) {
           <button key={a.id} onClick={() => onSelect(a.id)}
             style={{ padding:`6px ${Space.md}px`,
               background: selected===a.id ? Accent : Surface.Subtle,
-              color: selected===a.id ? '#fff' : Text.Secondary,
+              color: selected===a.id ? Text.Inverse : Text.Secondary,
               border:'none', borderRadius:Radius.pill, cursor:'pointer',
               fontFamily:'inherit', fontSize:FontSize.Caption,
               fontWeight: selected===a.id ? FontWeight.SemiBold : FontWeight.Regular,
-              minHeight:32 }}>
+              minHeight:40 }}>
             {a.label}
           </button>
         ))}
@@ -243,9 +245,9 @@ export default function PlannerScreen({
           <button key={d} onClick={() => setHorizonDays(d)}
             style={{ padding:`5px ${Space.md}px`,
               background: horizonDays===d ? Accent : Surface.Subtle,
-              color: horizonDays===d ? '#fff' : Text.Secondary,
+              color: horizonDays===d ? Text.Inverse : Text.Secondary,
               border:'none', borderRadius:Radius.pill, cursor:'pointer',
-              fontSize:FontSize.Caption, fontFamily:'inherit', minHeight:30 }}>
+              fontSize:FontSize.Caption, fontFamily:'inherit', minHeight:40 }}>
             {d} days
           </button>
         ))}

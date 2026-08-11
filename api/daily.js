@@ -13,6 +13,7 @@ import { getDailyAstronomy, getBirthChart, getBirthChartFromParts } from '../lib
 import { resolveBirthLocation, locationIsPersonalised } from '../lib/astronomy/birthLocation.js'
 import { buildAstroContext }                from '../lib/astrology/index.js'
 import { buildDecisionObject, buildFamilyDecisionObject } from '../lib/decision/engine.js'
+import { CALC_VERSION } from '../lib/utils/version.js'
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
@@ -32,17 +33,30 @@ function validateRequest(body) {
 
 // ─── User parsing ─────────────────────────────────────────────────────────────
 
+/**
+ * parseUser — validates and normalises an incoming user object.
+ *
+ * Constitution §9: missing birth date is NOT silently defaulted.
+ * A user without a DOB is still parsed but flagged as unverified.
+ * The engine will use the date with reduced confidence (locationStatus: 'unresolved').
+ */
 function parseUser(u) {
   if (!u || !u.name) return null
   const parts = (u.dob || '').split('-')
-  const day   = parseInt(parts[0] || '1', 10)
-  const month = parseInt(parts[1] || '1', 10)
-  const year  = parseInt(parts[2] || '1990', 10)
+  const day   = parseInt(parts[0], 10)
+  const month = parseInt(parts[1], 10)
+  const year  = parseInt(parts[2], 10)
+  // Missing or invalid DOB — flag but do not silently fabricate 01-01-1990
+  const hasDob = !isNaN(day) && !isNaN(month) && !isNaN(year)
+                 && day >= 1 && month >= 1 && year >= 1900 && year <= 2100
   const [bh = 6, bm = 0] = (u.birth_time || '06:00').split(':').map(Number)
-  if (isNaN(day) || isNaN(month) || isNaN(year)) return null
   return {
     name:           String(u.name).slice(0, 50),
-    day, month, year, bh, bm,
+    day:            hasDob ? day   : null,
+    month:          hasDob ? month : null,
+    year:           hasDob ? year  : null,
+    bh, bm,
+    hasDob,         // explicit flag for downstream use
     place_of_birth: String(u.place_of_birth || '').slice(0, 100),
     timezone:       String(u.timezone || '').slice(0, 50)
   }
@@ -132,8 +146,11 @@ function buildResponse(targetDate, users, feedbackAdj) {
   const members = userModels.map((u, idx) => {
     // P0-NEW-01 fix: use getBirthChartFromParts with numeric args (getBirthChart needs a string)
     // P0-05 fix: resolve birth location to canonical lat/lon with explicit precision status
+    // Constitution §9: do not use chart if birth date is missing/invalid
     const location = resolveBirthLocation(u.place_of_birth, u.timezone)
-    const chart  = getBirthChartFromParts(u.day, u.month, u.year, u.bh, u.bm, location.lat)
+    const chart  = u.hasDob
+      ? getBirthChartFromParts(u.day, u.month, u.year, u.bh, u.bm, location.lat)
+      : null  // explicit null — no silent default birth date
     const ctx    = buildAstroContext(astroData, chart, feedbackAdj, primarySeed + idx)
     const dec    = buildDecisionObject(ctx, primarySeed + idx, 0)
     return buildMember(u.name, dec, location)
@@ -152,10 +169,11 @@ function buildResponse(targetDate, users, feedbackAdj) {
 
   // P0-04 fix: pass primary user's birth chart to weekly plan calculation
   // P0-05 fix: also resolve primary user's location for accurate lagna
+  // Constitution §9: only use birth chart when hasDob is verified
   const primaryLocation = userModels[0]
     ? resolveBirthLocation(userModels[0].place_of_birth, userModels[0].timezone)
     : null
-  const primaryChart  = userModels[0] ? getBirthChartFromParts(
+  const primaryChart  = (userModels[0]?.hasDob) ? getBirthChartFromParts(
     userModels[0].day, userModels[0].month, userModels[0].year,
     userModels[0].bh, userModels[0].bm, primaryLocation?.lat
   ) : null
@@ -177,7 +195,14 @@ function buildResponse(targetDate, users, feedbackAdj) {
     // Members and family
     members,
     family_alignment: familyAlignment,
-    week_plan:        weekPlan
+    week_plan:        weekPlan,
+    // Constitution §12: every response carries version + timestamp for traceability
+    _meta: {
+      calculationVersion: CALC_VERSION,
+      generatedAt:        new Date().toISOString(),
+      targetDate:         targetDate.toISOString().slice(0, 10),
+      locationStatus:     primaryLocation?.status || 'unresolved'
+    }
   }
 }
 

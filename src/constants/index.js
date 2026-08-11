@@ -42,20 +42,7 @@ export const QUALITY_COLOR = Object.freeze({
   'Low energy': '#f87171'
 })
 
-// ─── Design tokens (keeps components free of magic values) ───────────────────
-export const DESIGN = Object.freeze({
-  yellow:  '#facc15',
-  green:   '#4ade80',
-  amber:   '#fb923c',
-  red:     '#f87171',
-  gray2:   'var(--gray-2)',
-  gray3:   'var(--gray-3)',
-  gray4:   'var(--gray-4)',
-  white:   '#fff',
-  cardR:   14,     // border-radius for cards
-  pad:     '12px 14px',
-  gap:     8
-})
+// Colours live in src/styles/tokens/colors.js — do not add raw hex here.
 
 // ─── Feedback outcomes ────────────────────────────────────────────────────────
 export const FEEDBACK = Object.freeze({
