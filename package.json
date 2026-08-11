@@ -1,6 +1,6 @@
 {
   "name": "kairos",
-  "version": "1.0.0",
+  "version": "30.9.1",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -22,5 +22,6 @@
     "workbox-cacheable-response": "^7.1.0",
     "workbox-expiration": "^7.1.0"
   },
-  "type": "module"
+  "type": "module",
+  "description": "Kairos \u2014 decision timing app. Product version in public/version.json; npm version is semver placeholder."
 }

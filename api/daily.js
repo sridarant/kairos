@@ -14,6 +14,7 @@ import { resolveBirthLocation, locationIsPersonalised } from '../lib/astronomy/b
 import { buildAstroContext }                from '../lib/astrology/index.js'
 import { buildDecisionObject, buildFamilyDecisionObject } from '../lib/decision/engine.js'
 import { CALC_VERSION } from '../lib/utils/version.js'
+import { buildDailyInsight, buildWindowMap } from '../lib/models/DailyInsight.js'
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
@@ -86,7 +87,10 @@ function buildMember(name, decisionObj, location = null) {
     locationStatus:  location?.status || 'unresolved',
     locationSource:  location?.source || 'default',
     // P0-07: scoredSlots passed through for family overlap calculation
-    scoredSlots:     d.scoredSlots || []
+    scoredSlots:     d.scoredSlots || [],
+    // Item 3/4: canonical per-domain windows (finance/property/shopping use risk dim)
+    windows:         buildWindowMap(d.scoredSlots),
+    _reasoningResult:d._reasoningResult || null
   }
 }
 
