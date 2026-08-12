@@ -12,7 +12,8 @@ import { PROFILE_STATUS_COLOR } from '../app/config/userProfile.js'
 import HomeScreen     from '../components/HomeScreen.jsx'
 import PlannerScreen  from '../components/PlannerScreen.jsx'
 import FamilyScreen   from '../components/FamilyScreen.jsx'
-import InsightsScreen from '../components/InsightsScreen.jsx'
+import InsightsScreen  from '../components/InsightsScreen.jsx'
+import SettingsScreen  from '../components/SettingsScreen.jsx'
 import ProfileModal   from '../components/ProfileModal.jsx'
 import InviteModal    from '../components/InviteModal.jsx'
 import TimelineSection  from '../components/pages/today/TimelineSection.jsx'
@@ -127,10 +128,10 @@ function ContextPanel({ bs, activeTab, loading, open, onToggle }) {
 export default function DesktopShell({ bs }) {
   const loading   = bs.status === ASYNC_STATE.LOADING
   const activeTab = bs.tab
-  const [panelOpen, setPanelOpen] = useState(true)  // collapsible context panel
+  const [panelOpen, setPanelOpen] = useState(false)  // R2.4A: default closed  // collapsible context panel
 
   function handleNav(tab) {
-    if (tab === TABS.MORE) { bs.openProfile(); return }
+    // R2.4A: Settings is a page; no modal on nav
     bs.setTab(tab)
     if (tab === TABS.TODAY) bs.handleReturnToday()
   }
@@ -170,6 +171,11 @@ export default function DesktopShell({ bs }) {
         )}
         {activeTab === TABS.JOURNAL && (
           <InsightsScreen identity={bs.identity} />
+        )}
+        {activeTab === TABS.MORE && (
+          <SettingsScreen identity={bs.identity}
+            onSave={bs.handleSaveProfile} onExport={bs.handleExport}
+            onImport={bs.handleImport} onDelete={bs.handleDeleteProfile} />
         )}
       </div>
 

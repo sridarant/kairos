@@ -1,6 +1,6 @@
 {
   "name": "kairos",
-  "version": "30.10.5",
+  "version": "30.10.6",
   "private": true,
   "scripts": {
     "dev": "vite",

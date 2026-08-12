@@ -36,13 +36,15 @@ const P = {
 
 // ─── Surface ──────────────────────────────────────────────────────────────────
 export const Surface = Object.freeze({
-  Background:  P.gray50,
-  Base:        P.white,
-  Card:        P.white,
-  Subtle:      P.gray100,
-  Line:        P.gray200,
+  // R2.4A: Tonal layering — page visibly differs from cards.
+  // NOT a dark theme. Soft warm gray canvas with white primary surfaces.
+  Background:  P.gray100,   // page canvas: #f3f4f6 — visibly different from white cards
+  Base:        P.white,     // primary surfaces (nav, modals)
+  Card:        P.white,     // content cards (on gray canvas these float cleanly)
+  Subtle:      P.gray50,    // secondary surface: #f9fafb — between canvas and white
+  Line:        P.gray200,   // borders: #e5e7eb — subtle
   Divider:     P.gray200,
-  Overlay:     'rgba(0,0,0,0.45)',
+  Overlay:     'rgba(0,0,0,0.4)',
 })
 
 // ─── Text ─────────────────────────────────────────────────────────────────────

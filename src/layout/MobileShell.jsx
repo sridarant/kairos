@@ -9,7 +9,8 @@ import HomeScreen     from '../components/HomeScreen.jsx'
 import PlannerScreen  from '../components/PlannerScreen.jsx'
 import FamilyScreen   from '../components/FamilyScreen.jsx'
 import InsightsScreen from '../components/InsightsScreen.jsx'
-import ProfileModal   from '../components/ProfileModal.jsx'
+import ProfileModal    from '../components/ProfileModal.jsx'
+import SettingsScreen  from '../components/SettingsScreen.jsx'
 import InviteModal    from '../components/InviteModal.jsx'
 import OnboardingModal from '../components/OnboardingModal.jsx'
 
@@ -52,7 +53,7 @@ export default function MobileShell({ bs }) {
   const tab     = bs.tab
 
   function onSelect(t) {
-    if (t === TABS.MORE) { bs.openProfile(); return }
+    // R2.4A: Settings is a page — setTab directly, no modal
     bs.setTab(t)
     if (t === TABS.TODAY) bs.handleReturnToday()
   }
@@ -87,6 +88,11 @@ export default function MobileShell({ bs }) {
       )}
       {tab === TABS.JOURNAL && (
         <InsightsScreen identity={bs.identity} />
+      )}
+      {tab === TABS.MORE && (
+        <SettingsScreen identity={bs.identity}
+          onSave={bs.handleSaveProfile} onExport={bs.handleExport}
+          onImport={bs.handleImport} onDelete={bs.handleDeleteProfile} />
       )}
 
       <BottomNav active={tab} onSelect={onSelect} />

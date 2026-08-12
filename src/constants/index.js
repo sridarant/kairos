@@ -54,11 +54,12 @@ export const FEEDBACK = Object.freeze({
 
 // ─── Tab identifiers ──────────────────────────────────────────────────────────
 export const TABS = Object.freeze({
-  TODAY:   'today',
-  PLANNER: 'planner',
-  FAMILY:  'family',
-  JOURNAL: 'journal',
-  MORE:    'more'
+  TODAY:    'today',
+  PLANNER:  'planner',
+  FAMILY:   'family',
+  JOURNAL:  'journal',
+  MORE:     'more',
+  SETTINGS: 'settings'   // R2.4A: Settings is now a page, not a modal
 })
 
 // ─── Async state labels ───────────────────────────────────────────────────────

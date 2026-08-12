@@ -148,11 +148,11 @@ function FamilyOverview({ brief, daily, members, dateContext, onMemberSelect, on
       </div>
 
       {/* Individual compact cards */}
-      {members.length > 1 && (
+      {apiMembers.length > 1 && (
         <>
           <SectionTitle>Individual Outlook</SectionTitle>
           <div style={{ display:'flex', gap:Space.sm, flexWrap:'wrap', marginBottom:Space.xl }}>
-            {members.map((m, i) => (
+            {apiMembers.map((m, i) => (
               <MemberCompactCard key={i} member={m} idx={i} onSelect={onMemberSelect} />
             ))}
           </div>
@@ -359,7 +359,7 @@ export default function FamilyScreen({
       {/* Content: everyone or individual */}
       {selected === 'everyone' ? (
         <FamilyOverview
-          brief={brief} daily={daily}
+          brief={brief} daily={daily} members={apiMembers}
           dateContext={dateContext}
           onMemberSelect={handleMemberSelect}
           onFetchFuture={onFetchFuture} />

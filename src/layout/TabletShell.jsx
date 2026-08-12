@@ -10,7 +10,7 @@ import HomeScreen     from '../components/HomeScreen.jsx'
 import PlannerScreen  from '../components/PlannerScreen.jsx'
 import FamilyScreen   from '../components/FamilyScreen.jsx'
 import InsightsScreen from '../components/InsightsScreen.jsx'
-import ProfileModal   from '../components/ProfileModal.jsx'
+import SettingsScreen from '../components/SettingsScreen.jsx'
 import InviteModal    from '../components/InviteModal.jsx'
 
 const NAV_ITEMS = [
@@ -18,7 +18,7 @@ const NAV_ITEMS = [
   { id:TABS.PLANNER, icon:'📅', label:'Planner'  },
   { id:TABS.FAMILY,  icon:'👨‍👩‍👧', label:'Family'   },
   { id:TABS.JOURNAL, icon:'💡', label:'Insights' },
-  { id:TABS.MORE,    icon:'◦',   label:'Profile'  },
+  { id:TABS.MORE,    icon:'◦',   label:'Settings' },
 ]
 
 function SideNav({ active, onSelect, profileStatus, primaryUser }) {
@@ -71,7 +71,7 @@ export default function TabletShell({ bs }) {
   const activeTab = bs.tab
 
   function handleNav(tab) {
-    if (tab === TABS.MORE) { bs.openProfile(); return }
+    // R2.4A: Settings is a page
     bs.setTab(tab)
     if (tab === TABS.TODAY) bs.handleReturnToday()
   }
@@ -90,7 +90,7 @@ export default function TabletShell({ bs }) {
             loading={loading} status={bs.status}
             primaryUser={bs.primaryUser} profileStatus={bs.profileStatus}
             dateContext={bs.dateContext} diagnostics={bs.diagnostics}
-            onProfileOpen={bs.openProfile} onInvite={bs.openInvite}
+            onProfileOpen={() => bs.setTab(TABS.MORE)} onInvite={bs.openInvite}
             onFetchFuture={bs.handleFetchFuture} onReturnToday={bs.handleReturnToday}
             onFeedback={bs.handleFeedback}
           />
