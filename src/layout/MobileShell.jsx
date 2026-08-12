@@ -9,7 +9,6 @@ import HomeScreen     from '../components/HomeScreen.jsx'
 import PlannerScreen  from '../components/PlannerScreen.jsx'
 import FamilyScreen   from '../components/FamilyScreen.jsx'
 import InsightsScreen from '../components/InsightsScreen.jsx'
-import ProfileModal    from '../components/ProfileModal.jsx'
 import SettingsScreen  from '../components/SettingsScreen.jsx'
 import InviteModal    from '../components/InviteModal.jsx'
 import OnboardingModal from '../components/OnboardingModal.jsx'
@@ -19,7 +18,7 @@ const NAV = [
   { id:TABS.PLANNER, label:'Planner'  },
   { id:TABS.FAMILY,  label:'Family'   },
   { id:TABS.JOURNAL, label:'Insights' },
-  { id:TABS.MORE,    label:'Profile'  },
+  { id:TABS.SETTINGS,    label:'Settings' },
 ]
 
 function BottomNav({ active, onSelect }) {
@@ -70,7 +69,7 @@ export default function MobileShell({ bs }) {
           loading={loading} status={bs.status}
           primaryUser={bs.primaryUser} profileStatus={bs.profileStatus}
           dateContext={bs.dateContext} diagnostics={bs.diagnostics}
-          onProfileOpen={bs.openProfile} onInvite={bs.openInvite}
+          onProfileOpen={() => bs.setTab(TABS.SETTINGS)} onInvite={bs.openInvite}
           onFetchFuture={bs.handleFetchFuture} onReturnToday={bs.handleReturnToday}
           onFeedback={bs.handleFeedback}
           onFamilyPlan={() => bs.setTab(TABS.FAMILY)}
@@ -89,7 +88,7 @@ export default function MobileShell({ bs }) {
       {tab === TABS.JOURNAL && (
         <InsightsScreen identity={bs.identity} />
       )}
-      {tab === TABS.MORE && (
+      {tab === TABS.SETTINGS && (
         <SettingsScreen identity={bs.identity}
           onSave={bs.handleSaveProfile} onExport={bs.handleExport}
           onImport={bs.handleImport} onDelete={bs.handleDeleteProfile} />
@@ -100,11 +99,7 @@ export default function MobileShell({ bs }) {
       {bs.onboardOpen && (
         <OnboardingModal onComplete={bs.handleOnboardComplete} onSkip={bs.closeOnboard} />
       )}
-      {bs.profileOpen && (
-        <ProfileModal onClose={bs.closeProfile} identity={bs.identity}
-          onSave={bs.handleSaveProfile} onExport={bs.handleExport}
-          onImport={bs.handleImport} onDelete={bs.handleDeleteProfile} />
-      )}
+      {/* ProfileModal removed R2.4A: Settings is a page */}
       {bs.inviteOpen && <InviteModal onClose={bs.closeInvite} />}
     </div>
   )

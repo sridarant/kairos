@@ -20,7 +20,7 @@ export function useBootstrap() {
   const [tab,           setTab]           = useState(TABS.TODAY)
   const [identity,      setIdentity]      = useState(_init.identity)
   const [profileStatus, setProfileStatus] = useState(_init.profileStatus)
-  const [profileOpen,   setProfileOpen]   = useState(false)
+  // profileOpen removed R2.4A — Settings is a page, no modal needed
   const [inviteOpen,    setInviteOpen]    = useState(false)
   const [onboardOpen,   setOnboardOpen]   = useState(!identityManager.isOnboarded)
   const [saveMessage,   setSaveMessage]   = useState(null)
@@ -113,12 +113,12 @@ export function useBootstrap() {
     daily, status, tab, setTab, daysAhead, dateContext,
     identity, primaryUser, allUsers, profileStatus, saveMessage,
     ...dtos, diagnostics,
-    profileOpen, inviteOpen, onboardOpen,
+    inviteOpen, onboardOpen,
     handleSaveProfile, handleOnboardComplete,
     handleFeedback, handleFetchFuture, handleReturnToday,
     handleExport, handleImport, handleDeleteProfile,
-    openProfile:  () => setProfileOpen(true),
-    closeProfile: () => setProfileOpen(false),
+    // openProfile removed R2.4A
+    // closeProfile removed R2.4A
     openInvite:   () => setInviteOpen(true),
     closeInvite:  () => setInviteOpen(false),
     closeOnboard: () => setOnboardOpen(false),

@@ -14,7 +14,6 @@ import PlannerScreen  from '../components/PlannerScreen.jsx'
 import FamilyScreen   from '../components/FamilyScreen.jsx'
 import InsightsScreen  from '../components/InsightsScreen.jsx'
 import SettingsScreen  from '../components/SettingsScreen.jsx'
-import ProfileModal   from '../components/ProfileModal.jsx'
 import InviteModal    from '../components/InviteModal.jsx'
 import TimelineSection  from '../components/pages/today/TimelineSection.jsx'
 import TomorrowSection  from '../components/pages/today/TomorrowSection.jsx'
@@ -25,7 +24,7 @@ const NAV_ITEMS = [
   { id:TABS.PLANNER, label:'Planner'  },
   { id:TABS.FAMILY,  label:'Family'   },
   { id:TABS.JOURNAL, label:'Insights' },
-  { id:TABS.MORE,    label:'Profile'  },
+  { id:TABS.SETTINGS,    label:'Settings' },
 ]
 
 function SideNav({ active, onSelect, profileStatus, primaryUser, dateContext }) {
@@ -154,7 +153,7 @@ export default function DesktopShell({ bs }) {
             loading={loading} status={bs.status}
             primaryUser={bs.primaryUser} profileStatus={bs.profileStatus}
             dateContext={bs.dateContext} diagnostics={bs.diagnostics}
-            onProfileOpen={bs.openProfile} onInvite={bs.openInvite}
+            onProfileOpen={() => bs.setTab(TABS.SETTINGS)} onInvite={bs.openInvite}
             onFetchFuture={bs.handleFetchFuture} onReturnToday={bs.handleReturnToday}
             onFeedback={bs.handleFeedback} showTimeline={false}
           />
@@ -172,7 +171,7 @@ export default function DesktopShell({ bs }) {
         {activeTab === TABS.JOURNAL && (
           <InsightsScreen identity={bs.identity} />
         )}
-        {activeTab === TABS.MORE && (
+        {activeTab === TABS.SETTINGS && (
           <SettingsScreen identity={bs.identity}
             onSave={bs.handleSaveProfile} onExport={bs.handleExport}
             onImport={bs.handleImport} onDelete={bs.handleDeleteProfile} />
@@ -181,11 +180,7 @@ export default function DesktopShell({ bs }) {
 
       <ContextPanel bs={bs} activeTab={activeTab} loading={loading} open={panelOpen} onToggle={() => setPanelOpen(v=>!v)} />
 
-      {bs.profileOpen && (
-        <ProfileModal onClose={bs.closeProfile} identity={bs.identity}
-          onSave={bs.handleSaveProfile} onExport={bs.handleExport}
-          onImport={bs.handleImport} onDelete={bs.handleDeleteProfile} />
-      )}
+      {/* ProfileModal removed R2.4A: Settings is a page */}
       {bs.inviteOpen && <InviteModal onClose={bs.closeInvite} />}
     </div>
   )

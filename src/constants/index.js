@@ -58,8 +58,7 @@ export const TABS = Object.freeze({
   PLANNER:  'planner',
   FAMILY:   'family',
   JOURNAL:  'journal',
-  MORE:     'more',
-  SETTINGS: 'settings'   // R2.4A: Settings is now a page, not a modal
+  SETTINGS: 'settings'   // R2.4A: canonical Settings tab; TABS.MORE removed
 })
 
 // ─── Async state labels ───────────────────────────────────────────────────────

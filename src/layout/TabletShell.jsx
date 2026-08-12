@@ -18,7 +18,7 @@ const NAV_ITEMS = [
   { id:TABS.PLANNER, icon:'📅', label:'Planner'  },
   { id:TABS.FAMILY,  icon:'👨‍👩‍👧', label:'Family'   },
   { id:TABS.JOURNAL, icon:'💡', label:'Insights' },
-  { id:TABS.MORE,    icon:'◦',   label:'Settings' },
+  { id:TABS.SETTINGS,    icon:'◦',   label:'Settings' },
 ]
 
 function SideNav({ active, onSelect, profileStatus, primaryUser }) {
@@ -90,7 +90,7 @@ export default function TabletShell({ bs }) {
             loading={loading} status={bs.status}
             primaryUser={bs.primaryUser} profileStatus={bs.profileStatus}
             dateContext={bs.dateContext} diagnostics={bs.diagnostics}
-            onProfileOpen={() => bs.setTab(TABS.MORE)} onInvite={bs.openInvite}
+            onProfileOpen={() => bs.setTab(TABS.SETTINGS)} onInvite={bs.openInvite}
             onFetchFuture={bs.handleFetchFuture} onReturnToday={bs.handleReturnToday}
             onFeedback={bs.handleFeedback}
           />
@@ -114,12 +114,7 @@ export default function TabletShell({ bs }) {
           <InsightsScreen identity={bs.identity} />
         )}
       </div>
-
-      {bs.profileOpen && (
-        <ProfileModal onClose={bs.closeProfile} identity={bs.identity}
-          onSave={bs.handleSaveProfile} onExport={bs.handleExport}
-          onImport={bs.handleImport} onDelete={bs.handleDeleteProfile} />
-      )}
+      {/* ProfileModal removed R2.4A */}
       {bs.inviteOpen && <InviteModal onClose={bs.closeInvite} />}
     </div>
   )
