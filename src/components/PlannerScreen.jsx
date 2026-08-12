@@ -19,71 +19,137 @@ import { Space, FontSize, FontWeight, Radius } from '../styles/tokens/index.js'
 import { EmptyState } from './common/index.jsx'
 import { buildDateContext } from '../app/bootstrap/BootstrapManager.js'
 
-// ─── Fetch horizon data from API ─────────────────────────────────────────────
+// ─── Fetch horizon data — ONE /api/horizon request ───────────────────────────
+// R2.3: replaces N sequential /api/daily calls with a single /api/horizon call.
+// Before: 7-day → 7 calls × 8 calc-days each = 56 day-calculations (serial).
+// After:  7-day → 1 call × 7 calc-days       = 7  day-calculations.
 
-async function fetchHorizon(users, days) {
-  const results = []
-  for (let i = 1; i <= days; i++) {
-    try {
-      const now = new Date()
-      const base = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      base.setDate(base.getDate() + i)
-      const yyyy = base.getFullYear()
-      const mm   = String(base.getMonth()+1).padStart(2,'0')
-      const dd   = String(base.getDate()).padStart(2,'0')
-      const calculationDate = `${yyyy}-${mm}-${dd}`
-      const res = await fetch('/api/daily', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ users:users||[], daysAhead:i, calculationDate })
-      })
-      if (res.ok) {
-        const raw = await res.json()
-        // DTO boundary: adapt raw API response through canonical adapter
-        results.push(adaptHorizonDay({ ...raw, daysAhead:i, date:calculationDate }, i))
-      }
-    } catch { /* skip failed days */ }
+async function fetchHorizon(users, days, activityType) {
+  try {
+    const now  = new Date()
+    const yyyy = now.getFullYear()
+    const mm   = String(now.getMonth()+1).padStart(2,'0')
+    const dd   = String(now.getDate()).padStart(2,'0')
+    const startDate = `${yyyy}-${mm}-${dd}`
+
+    const res = await fetch('/api/horizon', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ users:users||[], days, startDate, activityType: activityType||null })
+    })
+
+    if (!res.ok) return { days:[], bestDate:null, alternateDate:null, error:`HTTP ${res.status}` }
+
+    const data = await res.json()
+    // DTO boundary: adapt each day through canonical adapter
+    const adaptedDays = (data.days || []).map(raw => {
+      if (raw.status === 'failed') return { ...raw, _failed:true }
+      return adaptHorizonDay(raw, raw.daysAhead)
+    })
+
+    return {
+      days:          adaptedDays,
+      bestDate:      data.bestDate  ? adaptHorizonDay(data.bestDate,  data.bestDate.daysAhead)  : null,
+      alternateDate: data.alternateDate ? adaptHorizonDay(data.alternateDate, data.alternateDate.daysAhead) : null,
+      activityType:  data.activityType,
+      activityLabel: data.activityLabel,
+      meta:          data.meta,
+    }
+  } catch (err) {
+    return { days:[], bestDate:null, alternateDate:null, error:err?.message }
   }
-  return results
 }
 
-// ─── Activity selector ────────────────────────────────────────────────────────
+// ─── Activity grouping (P1 — progressive disclosure) ─────────────────────────
+// Groups prevent a 13-item flat list. Expanding one group at a time.
 
-const ACTIVITY_LIST = [
-  { id:'conversation', label:'Conversation' },
-  { id:'meeting',      label:'Meeting'       },
-  { id:'career',       label:'Career'        },
-  { id:'finance',      label:'Finance'       },
-  { id:'purchase',     label:'Purchase'      },
-  { id:'property',     label:'Property'      },
-  { id:'travel',       label:'Travel'        },
-  { id:'study',        label:'Study'         },
-  { id:'family',       label:'Family'        },
-  { id:'wellness',     label:'Wellness'      },
-  { id:'medical_routine',  label:'Health check'     },
-  { id:'medical_decision', label:'Medical decision'  },
-  { id:'other',        label:'Other'         },
+const ACTIVITY_GROUPS = [
+  {
+    id:'work', label:'Work',
+    items:[
+      { id:'career',       label:'Career decision' },
+      { id:'meeting',      label:'Important meeting' },
+      { id:'conversation', label:'Conversation' },
+    ]
+  },
+  {
+    id:'money', label:'Money',
+    items:[
+      { id:'finance',  label:'Financial decision' },
+      { id:'purchase', label:'Major purchase' },
+      { id:'property', label:'Property' },
+    ]
+  },
+  {
+    id:'personal', label:'Personal',
+    items:[
+      { id:'family',   label:'Family activity' },
+      { id:'travel',   label:'Travel' },
+      { id:'wellness', label:'Wellness' },
+      { id:'study',    label:'Study' },
+    ]
+  },
+  {
+    id:'health', label:'Health',
+    items:[
+      { id:'medical_routine',  label:'Health check' },
+      { id:'medical_decision', label:'Medical decision' },
+    ]
+  },
 ]
 
 function ActivitySelector({ selected, onSelect }) {
+  const [openGroup, setOpenGroup] = useState(null)
+
+  // Auto-open the group containing the selected activity
+  const selectedGroup = ACTIVITY_GROUPS.find(g => g.items.some(i => i.id === selected))?.id || null
+
   return (
     <div>
       <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.08em',
         color:Text.Muted, fontWeight:FontWeight.Medium, marginBottom:Space.md }}>
         What are you planning?
       </p>
-      <div style={{ display:'flex', flexWrap:'wrap', gap:Space.sm }}>
-        {ACTIVITY_LIST.map(a => (
-          <button key={a.id} onClick={() => onSelect(a.id)}
-            style={{ padding:`6px ${Space.md}px`,
-              background: selected===a.id ? Accent : Surface.Subtle,
-              color: selected===a.id ? Text.Inverse : Text.Secondary,
-              border:'none', borderRadius:Radius.pill, cursor:'pointer',
-              fontFamily:'inherit', fontSize:FontSize.Caption,
-              fontWeight: selected===a.id ? FontWeight.SemiBold : FontWeight.Regular,
-              minHeight:40 }}>
-            {a.label}
-          </button>
-        ))}
+      <div style={{ display:'flex', flexDirection:'column', gap:Space.sm }}>
+        {ACTIVITY_GROUPS.map(group => {
+          const isOpen  = openGroup === group.id || selectedGroup === group.id
+          const hasSelected = group.items.some(i => i.id === selected)
+          return (
+            <div key={group.id}>
+              {/* Group header */}
+              <button
+                onClick={() => setOpenGroup(isOpen && !hasSelected ? null : group.id)}
+                style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                  width:'100%', padding:`${Space.sm}px ${Space.md}px`,
+                  background: hasSelected ? `${Accent}18` : Surface.Subtle,
+                  border: hasSelected ? `1px solid ${Accent}44` : `1px solid transparent`,
+                  borderRadius:Radius.lg, cursor:'pointer', fontFamily:'inherit',
+                  fontSize:FontSize.Caption, fontWeight:FontWeight.Medium,
+                  color: hasSelected ? Accent : Text.Secondary, minHeight:40,
+                  textAlign:'left' }}>
+                <span>{group.label}</span>
+                <span style={{ fontSize:10, opacity:0.6 }}>{isOpen ? '▲' : '▼'}</span>
+              </button>
+              {/* Items — shown when group is open */}
+              {isOpen && (
+                <div style={{ display:'flex', flexWrap:'wrap', gap:Space.xs,
+                  padding:`${Space.sm}px 0 ${Space.xs}px ${Space.md}px` }}>
+                  {group.items.map(item => (
+                    <button key={item.id}
+                      onClick={() => { onSelect(item.id); setOpenGroup(group.id) }}
+                      style={{ padding:`5px ${Space.md}px`,
+                        background: selected===item.id ? Accent : Surface.Card,
+                        color: selected===item.id ? Text.Inverse : Text.Secondary,
+                        border:`1px solid ${selected===item.id ? Accent : Surface.Line}`,
+                        borderRadius:Radius.pill, cursor:'pointer', fontFamily:'inherit',
+                        fontSize:FontSize.Caption, minHeight:36 }}>
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -104,51 +170,73 @@ function SafetyNote({ note }) {
 }
 
 function DayResult({ result, label, rank }) {
+  if (!result) return null
   const ctx = buildDateContext(result.daysAhead)
-  const dimScore = result.bestDimScore
-  const approx   = result.isApproximate
+  // P0: distinguish best date from best window clearly
+  const bestWindow = result.activityWindow || result.bestWindow || result.golden_window
+  const approx     = result.activityApprox || result.isApproximate
+
+  if (result._failed || result.status === 'failed') {
+    // P0: surfaced (not silently skipped)
+    return (
+      <div style={{ marginBottom:Space.xl }}>
+        <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.08em',
+          color:Text.Muted, fontWeight:FontWeight.Medium, marginBottom:Space.sm }}>{label}</p>
+        <p style={{ fontSize:FontSize.BodySmall, color:Text.Muted }}>
+          {result.date} — calculation unavailable
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div style={{ marginBottom:Space.xl }}>
+      {/* Label: "Best date" or "Alternative" */}
       <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.08em',
-        color:Text.Muted, fontWeight:FontWeight.Medium, marginBottom:Space.sm }}>
+        color:Text.Muted, fontWeight:FontWeight.Medium, marginBottom:Space.xs }}>
         {label}
       </p>
+      {/* Best date: weekday + calendar date */}
       <p style={{ fontSize:FontSize.Heading3, fontWeight:FontWeight.Bold, color:Text.Primary,
         marginBottom:Space.xs }}>
         {ctx.weekday}, {ctx.dayMonth}
       </p>
-
-      {result.bestWindow && (
-        <div style={{ display:'inline-flex', alignItems:'center', gap:Space.xs,
-          background:Surface.Subtle, borderRadius:Radius.pill,
-          padding:`4px ${Space.md}px`, marginBottom:Space.md }}>
-          <span style={{ fontSize:12, color:Accent }}>●</span>
-          <span style={{ fontSize:FontSize.Caption, color:Text.Primary, fontWeight:FontWeight.Medium }}>
-            {result.bestWindow}
-          </span>
+      {/* Best window: explicit time range */}
+      {bestWindow && (
+        <div style={{ marginBottom:Space.md }}>
+          <p style={{ fontSize:FontSize.Badge, textTransform:'uppercase', letterSpacing:'0.07em',
+            color:Text.Muted, marginBottom:2 }}>Best window</p>
+          <div style={{ display:'inline-flex', alignItems:'center', gap:Space.xs,
+            background:Surface.Subtle, borderRadius:Radius.pill,
+            padding:`4px ${Space.md}px` }}>
+            <span style={{ fontSize:10, color:Accent }}>●</span>
+            <span style={{ fontSize:FontSize.Caption, color:Text.Primary, fontWeight:FontWeight.Medium }}>
+              {bestWindow}
+            </span>
+          </div>
         </div>
       )}
-
-      {/* Why — from structured evidence */}
+      {/* Why — from engine evidence (never invented) */}
       {result.explanation?.why && (
-        <p style={{ fontSize:FontSize.BodySmall, color:Text.Secondary,
-          lineHeight:1.6, marginBottom:Space.sm }}>
+        <p style={{ fontSize:FontSize.BodySmall, color:Text.Secondary, lineHeight:1.6, marginBottom:Space.sm }}>
           {result.explanation.why}
         </p>
       )}
-
-      {/* Caution — if present */}
+      {/* Confidence */}
+      {result.explanation?.confidence && (
+        <p style={{ fontSize:FontSize.Caption, color:Text.Muted, marginBottom:Space.xs }}>
+          Confidence: {result.explanation.confidence}
+        </p>
+      )}
+      {/* Caution */}
       {result.explanation?.caution && (
-        <p style={{ fontSize:FontSize.Caption, color:Status.Caution,
-          lineHeight:1.5 }}>
+        <p style={{ fontSize:FontSize.Caption, color:Status.Caution, lineHeight:1.5 }}>
           ⚠ {result.explanation.caution}
         </p>
       )}
-
       {approx && (
         <p style={{ fontSize:FontSize.Badge, color:Text.Muted, marginTop:Space.xs }}>
-          Approximate — full profile data unavailable for this day
+          Approximate — full profile unavailable
         </p>
       )}
     </div>
@@ -166,8 +254,19 @@ function HorizonList({ ranked, activityId }) {
         All dates
       </p>
       {ranked.map((r, i) => {
+        if (r._failed || r.status === 'failed') {
+          return (
+            <div key={i} style={{ display:'grid', gridTemplateColumns:'130px 1fr',
+              gap:Space.md, padding:`${Space.sm}px 0`,
+              borderBottom:`1px solid ${Surface.Line}`, alignItems:'center', opacity:0.4 }}>
+              <span style={{ fontSize:FontSize.Caption, color:Text.Muted }}>{r.date}</span>
+              <span style={{ fontSize:FontSize.Caption, color:Text.Muted }}>Unavailable</span>
+            </div>
+          )
+        }
         const ctx = buildDateContext(r.daysAhead)
-        const scoreBar = Math.round(r.score / 100 * 8)  // visual width 0-8 chars
+        const win = r.activityWindow || r.bestWindow || r.golden_window
+        const score = r.activityScore ?? r.suitabilityScore ?? r.score ?? 0
         return (
           <div key={i} style={{ display:'grid', gridTemplateColumns:'130px 1fr auto',
             gap:Space.md, padding:`${Space.sm}px 0`,
@@ -176,12 +275,12 @@ function HorizonList({ ranked, activityId }) {
               {ctx.weekday.slice(0,3)}, {ctx.shortDate}
             </span>
             <span style={{ fontSize:FontSize.Caption, color:Text.Secondary }}>
-              {r.bestWindow || '—'}
+              {win || '—'}
             </span>
             <div style={{ display:'flex', gap:2 }}>
               {Array.from({length:5},(_,j)=>(
                 <div key={j} style={{ width:4, height:12, borderRadius:2,
-                  background: j < Math.round(r.score/20) ? Accent : Surface.Line }} />
+                  background: j < Math.round(score/20) ? Accent : Surface.Line }} />
               ))}
             </div>
           </div>
@@ -208,22 +307,28 @@ export default function PlannerScreen({
     return (daily?.members || []).map(m => ({ name:m.name, dob:'', birth_time:'' }))
   }, [allUsers, daily])
 
-  // Fetch horizon when days changes
+  // Fetch horizon — ONE /api/horizon call when days or activity changes
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    setHorizonData([])
-    fetchHorizon(users, horizonDays).then(data => {
-      if (!cancelled) { setHorizonData(data); setLoading(false) }
+    setHorizonData(null)
+    fetchHorizon(users, horizonDays, activityId).then(result => {
+      if (!cancelled) { setHorizonData(result); setLoading(false) }
     })
     return () => { cancelled = true }
-  }, [horizonDays, JSON.stringify(users)])
+  }, [horizonDays, activityId, JSON.stringify(users)])
 
-  // Run canonical planning engine (not React business logic)
+  // planResult comes from the API response (not re-computed in React)
+  // For local re-ranking when activityId changes before a new fetch completes,
+  // we use the lib engine — this is the ONLY place planActivity is called.
   const planResult = useMemo(() => {
-    if (!activityId || !horizonData.length) return null
-    return planActivity(horizonData, activityId, { maxResults:horizonDays })
-  }, [activityId, horizonData])
+    if (!horizonData?.days?.length) return null
+    // If API returned bestDate for the current activity, use it directly
+    if (activityId && horizonData.bestDate) return horizonData
+    // Fallback: rank locally using canonical lib function (no HTTP, same engine)
+    if (!activityId) return horizonData
+    return planActivity(horizonData.days, activityId, { maxResults:horizonDays })
+  }, [activityId, horizonData, horizonDays])
 
   return (
     <div style={{ padding:`${Space['3xl']}px ${Space.xl}px`,
@@ -267,24 +372,26 @@ export default function PlannerScreen({
       {/* Results */}
       {planResult && !loading && (
         <div>
-          {/* Safety note */}
-          <SafetyNote note={planResult.safetyNote} />
-
-          {/* Best date */}
-          {planResult.best && (
-            <DayResult result={planResult.best} label="Best time" rank={1} />
+          {/* Safety note — from canonical activity definition */}
+          {activityId && ACTIVITY_TYPES[activityId]?.safetyNote && (
+            <SafetyNote note={ACTIVITY_TYPES[activityId].safetyNote} />
           )}
 
-          {/* Alternative */}
-          {planResult.alternative && (
-            <DayResult result={planResult.alternative} label="Alternative" rank={2} />
+          {/* Best date / best window */}
+          {(planResult.bestDate || planResult.best) && (
+            <DayResult result={planResult.bestDate || planResult.best} label="Best date" rank={1} />
+          )}
+
+          {/* Alternative date / window */}
+          {(planResult.alternateDate || planResult.alternative) && (
+            <DayResult result={planResult.alternateDate || planResult.alternative} label="Alternative" rank={2} />
           )}
 
           {/* Divider */}
           <div style={{ borderTop:`1px solid ${Surface.Line}`, marginBottom:Space['3xl'] }} />
 
-          {/* Full ranked list */}
-          <HorizonList ranked={planResult.ranked} activityId={activityId} />
+          {/* Full list */}
+          <HorizonList ranked={planResult.days || planResult.ranked} activityId={activityId} />
         </div>
       )}
 

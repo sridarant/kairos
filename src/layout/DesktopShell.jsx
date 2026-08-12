@@ -5,6 +5,7 @@
  * No independently scrolling surfaces except the primary content area.
  * Context panel is scrolled within the primary column, not independently.
  */
+import { useState } from 'react'
 import { ASYNC_STATE, TABS } from '../constants/index.js'
 import { Surface, Text, Accent, Radius, Space, FontSize, FontWeight } from '../styles/tokens/index.js'
 import { PROFILE_STATUS_COLOR } from '../app/config/userProfile.js'
@@ -23,7 +24,7 @@ const NAV_ITEMS = [
   { id:TABS.PLANNER, label:'Planner'  },
   { id:TABS.FAMILY,  label:'Family'   },
   { id:TABS.JOURNAL, label:'Insights' },
-  { id:TABS.MORE,    label:'Settings' },
+  { id:TABS.MORE,    label:'Profile'  },
 ]
 
 function SideNav({ active, onSelect, profileStatus, primaryUser, dateContext }) {
@@ -79,44 +80,54 @@ function SideNav({ active, onSelect, profileStatus, primaryUser, dateContext }) 
   )
 }
 
-function ContextPanel({ bs, activeTab, loading }) {
-  const style = {
-    width:280, flexShrink:0, padding:`${Space['3xl']}px ${Space.xl}px`,
-    borderLeft:`1px solid ${Surface.Line}`, background:Surface.Base
-  }
-  if (loading) return (
-    <div style={style}><SkeletonCard lines={3}/><SkeletonCard lines={2}/></div>
-  )
-  if (activeTab === TABS.TODAY) return (
-    <div style={style}>
-      <TimelineSection timeline={bs.timeline} />
-      <div style={{ marginTop:Space['3xl'] }}>
-        <TomorrowSection brief={bs.brief} onFetchFuture={bs.handleFetchFuture} />
-      </div>
+/**
+ * ContextPanel — collapsible, secondary context column.
+ * R2.4: was always-visible 280px. Now toggle-able to avoid persistent clutter.
+ * Only shown on Today and Family tabs (Timeline + Tomorrow).
+ */
+function ContextPanel({ bs, activeTab, loading, open, onToggle }) {
+  const hasContent = activeTab === TABS.TODAY || activeTab === TABS.FAMILY
+
+  if (!hasContent) return null
+
+  return (
+    <div style={{ width: open ? 260 : 40, flexShrink:0, transition:'width 0.2s',
+      borderLeft:`1px solid ${Surface.Line}`, background:Surface.Base,
+      position:'sticky', top:0, height:'100vh', overflow:'hidden' }}>
+      {/* Toggle button */}
+      <button onClick={onToggle}
+        style={{ position:'absolute', top:Space['3xl'], left:0, width:40, height:32,
+          background:'none', border:'none', cursor:'pointer',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          color:Text.Muted, fontSize:10, zIndex:1 }}>
+        {open ? '›' : '‹'}
+      </button>
+      {open && (
+        <div style={{ padding:`${Space['3xl']}px ${Space.xl}px`, paddingLeft:Space['3xl'],
+          height:'100%', overflowY:'auto' }}>
+          {loading
+            ? <><SkeletonCard lines={3}/><SkeletonCard lines={2}/></>
+            : (
+              <>
+                <TimelineSection timeline={bs.timeline} />
+                {activeTab === TABS.TODAY && bs.brief?.tomorrowPreview && (
+                  <div style={{ marginTop:Space['3xl'] }}>
+                    <TomorrowSection brief={bs.brief} onFetchFuture={bs.handleFetchFuture} />
+                  </div>
+                )}
+              </>
+            )
+          }
+        </div>
+      )}
     </div>
   )
-  if (activeTab === TABS.PLANNER) return (
-    <div style={style}>
-      <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.08em',
-        color:Text.Muted, fontWeight:FontWeight.Medium, marginBottom:Space.xl }}>
-        Coming up
-      </p>
-      <p style={{ fontSize:FontSize.Caption, color:Text.Secondary }}>
-        {bs.dateContext?.weekLabel}
-      </p>
-    </div>
-  )
-  if (activeTab === TABS.FAMILY) return (
-    <div style={style}>
-      <TimelineSection timeline={bs.timeline} />
-    </div>
-  )
-  return <div style={style} />
 }
 
 export default function DesktopShell({ bs }) {
   const loading   = bs.status === ASYNC_STATE.LOADING
   const activeTab = bs.tab
+  const [panelOpen, setPanelOpen] = useState(true)  // collapsible context panel
 
   function handleNav(tab) {
     if (tab === TABS.MORE) { bs.openProfile(); return }
@@ -133,7 +144,7 @@ export default function DesktopShell({ bs }) {
         dateContext={bs.dateContext} />
 
       {/* Primary content */}
-      <div style={{ flex:1, minWidth:0, maxWidth:660, overflowY:'auto', height:'100vh' }}>
+      <div style={{ flex:1, minWidth:0, maxWidth:700, overflowY:'auto', height:'100vh' }}>
         {activeTab === TABS.TODAY && (
           <HomeScreen
             brief={bs.brief} recommendationPackages={bs.recommendationPackages}
@@ -162,7 +173,7 @@ export default function DesktopShell({ bs }) {
         )}
       </div>
 
-      <ContextPanel bs={bs} activeTab={activeTab} loading={loading} />
+      <ContextPanel bs={bs} activeTab={activeTab} loading={loading} open={panelOpen} onToggle={() => setPanelOpen(v=>!v)} />
 
       {bs.profileOpen && (
         <ProfileModal onClose={bs.closeProfile} identity={bs.identity}

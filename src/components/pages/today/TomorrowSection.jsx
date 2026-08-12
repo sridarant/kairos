@@ -1,74 +1,48 @@
 /**
- * TomorrowSection v29.3
+ * TomorrowSection v30.10.4 — Compact, text-based.
  *
- * Tomorrow should feel like a natural extension of today.
- * Richer display: outlook, best window, one tip, preparation nudge.
+ * R2.4: removed the heavy card, StarRating, ConfidenceBadge, and prep-tip copy.
+ * Stars are secondary. Shows: outlook word + best window, one line, tap to expand.
  */
-import { StarRating, ConfidenceBadge, SectionTitle } from '../../common/index.jsx'
-import { Surface, Text, Status, Accent, Radius, Space, Pad, FontSize, FontWeight } from '../../../styles/tokens/index.js'
+import { Surface, Text, Accent, Suitability, Space, FontSize, FontWeight } from '../../../styles/tokens/index.js'
 
-// Derive a forward-looking prep tip
-function prepTip(stars, theme) {
-  if (stars >= 4) return `Consider scheduling important work around ${theme?.toLowerCase() || 'your priorities'} tomorrow.`
-  if (stars >= 3) return 'A steady day — good for routine tasks and follow-ups.'
-  return 'A lighter day ahead — rest and recharge where possible.'
-}
+const TIER_DISPLAY = { Excellent:'Exceptional', Good:'Strong', Neutral:'Moderate', Moderate:'Challenging', Challenging:'Caution' }
 
 export default function TomorrowSection({ brief, onFetchFuture }) {
   const tomorrow = brief?.tomorrowPreview
   if (!tomorrow) return null
 
-  const outlookLabel = tomorrow.stars >= 4 ? 'Positive' : tomorrow.stars >= 3 ? 'Balanced' : 'Quiet'
-  const outlookColor = tomorrow.stars >= 4 ? Status.Success : tomorrow.stars >= 3 ? Accent : Text.Secondary
+  // Derive tier from stars
+  const tier = tomorrow.stars >= 5 ? 'Excellent' : tomorrow.stars >= 4 ? 'Good' :
+    tomorrow.stars >= 3 ? 'Neutral' : tomorrow.stars >= 2 ? 'Moderate' : 'Challenging'
+  const tierColor = Suitability[tier] || Text.Secondary
+  const label = TIER_DISPLAY[tier] || tier
 
   return (
-    <section aria-label="Tomorrow" style={{ marginBottom: Space.xs }}>
-      <SectionTitle>Tomorrow</SectionTitle>
-      <div onClick={() => onFetchFuture?.(1)} role="button" aria-label="Tap to see tomorrow in detail"
-        style={{ background: Surface.Card, borderRadius: Radius.card, padding: Pad.card, cursor:'pointer' }}>
-
-        {/* Header: outlook + confidence */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: Space.sm }}>
-          <div style={{ display:'flex', alignItems:'center', gap: Space.sm }}>
-            <StarRating value={tomorrow.stars} size={FontSize.CardTitle} />
-            <span style={{ fontSize: FontSize.Body, fontWeight: FontWeight.Bold, color: outlookColor }}>
-              {outlookLabel} day
+    <section aria-label="Tomorrow">
+      <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.08em',
+        color:Text.Muted, fontWeight:FontWeight.Medium, marginBottom:Space.md }}>
+        Tomorrow
+      </p>
+      <button onClick={() => onFetchFuture?.(1)}
+        style={{ width:'100%', textAlign:'left', background:'none', border:'none', cursor:'pointer',
+          padding:0, fontFamily:'inherit' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <span style={{ fontSize:FontSize.Body, fontWeight:FontWeight.SemiBold, color:tierColor }}>
+            {label}
+          </span>
+          {tomorrow.bestWindow && (
+            <span style={{ fontSize:FontSize.Caption, color:Text.Secondary }}>
+              {tomorrow.bestWindow}
             </span>
-          </div>
-          <ConfidenceBadge level={tomorrow.confidence} size={FontSize.Caption} />
+          )}
         </div>
-
-        {/* Theme + best window inline */}
-        {(tomorrow.theme || tomorrow.bestWindow) && (
-          <div style={{ display:'flex', gap: Space.md, marginBottom: Space.sm, flexWrap:'wrap' }}>
-            {tomorrow.theme && (
-              <span style={{ fontSize: FontSize.BodySmall, color: Text.Secondary }}>
-                Theme: <strong style={{ color: Text.Primary }}>{tomorrow.theme}</strong>
-              </span>
-            )}
-            {tomorrow.bestWindow && (
-              <span style={{ fontSize: FontSize.BodySmall, color: Accent, fontWeight: FontWeight.Bold }}>
-                ⏰ {tomorrow.bestWindow}
-              </span>
-            )}
-          </div>
+        {tomorrow.theme && (
+          <p style={{ fontSize:FontSize.Caption, color:Text.Muted, marginTop:4 }}>
+            {tomorrow.theme}
+          </p>
         )}
-
-        {/* Summary */}
-        <p style={{ fontSize: FontSize.BodySmall, color: Text.Secondary, lineHeight:1.5, marginBottom: Space.sm }}>
-          {tomorrow.summary}
-        </p>
-
-        {/* Prep tip */}
-        <p style={{ fontSize: FontSize.Caption, color: Text.Secondary, lineHeight:1.4,
-          borderTop:`1px solid ${Surface.Line}`, paddingTop: Space.sm, fontStyle:'italic' }}>
-          {prepTip(tomorrow.stars, tomorrow.theme)}
-        </p>
-
-        <p style={{ fontSize: FontSize.Badge, color: Text.Secondary, marginTop: Space.xs, opacity:0.5 }}>
-          Tap to view tomorrow →
-        </p>
-      </div>
+      </button>
     </section>
   )
 }

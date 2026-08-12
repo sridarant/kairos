@@ -1,80 +1,103 @@
-# Kairos Architecture
+# Kairos Architecture — v30.10.2
 
-## Overview
+*Updated to reflect R2.1 (UTC/longitude/Dasha fixes) and R2.2 (DailyInsight canonical model).*
 
-Kairos is a 10-layer Vedic astrology life planning companion. Data flows strictly downward — no layer imports from a layer above it. Each layer has a single responsibility and a defined public API.
+## Runtime
+
+- Vite 5 + React 18
+- Vercel serverless API functions
+- Supabase optional
+- PWA / Workbox
+- JavaScript / ES modules
 
 ## Layer Stack
 
 ```
-Layer 1: Astronomy          lib/astronomy/        Sidereal calculations, Lahiri ayanamsa
-Layer 2: Astrology          lib/astrology/        Panchang, dashas, yogas, context building
-Layer 3: Reasoning          lib/reasoning/        Evidence graph, conflict resolution
-Layer 4: Decision           lib/decision/         DO/WAIT/AVOID, confidence, timeline
-Layer 5: Recommendations    lib/recommendations/  Ranked recommendation packages
-Layer 6: Daily Brief        lib/dailyBrief/       Morning brief synthesis
-Layer 7: Adapters           lib/adapters/         snake_case → camelCase, DTO validation
-Layer 8: Bootstrap          src/app/bootstrap/    App startup, API orchestration
-Layer 9: React State        src/hooks/            useBootstrap — single state surface
-Layer 10: Presentation      src/components/       Pure rendering, no business logic
+Layer 1: Astronomy        lib/astronomy/         Pure calculations. JD, planets, Lagna.
+Layer 2: Astrology        lib/astrology/         Panchang, Dasha, Yogas, transit context.
+Layer 3: Reasoning        lib/reasoning/         Evidence graph, conflict resolution.
+Layer 4: Decision         lib/decision/          DO/WAIT/AVOID, suitability, confidence.
+Layer 5: Models           lib/models/            DailyInsight — canonical product output.
+Layer 6: Recommendations  lib/recommendations/   Ranked recommendation packages.
+Layer 7: Daily Brief      lib/dailyBrief/        Morning brief synthesis.
+Layer 8: Planning         lib/planning/          Activity planning, family overlap.
+Layer 9: Adapters         lib/adapters/          DTO boundary. Snake→camelCase.
+Layer 10: Bootstrap       src/app/bootstrap/     API orchestration, DTO pipeline.
+Layer 11: React State     src/hooks/             Single state surface.
+Layer 12: Presentation    src/components/        Render only. No business logic.
 ```
 
-## Data Flow
+## Canonical Calculation Path
 
 ```
 POST /api/daily
-  → getDailyAstronomy()                lib/astronomy
-  → buildAstroContext()                lib/astrology
-  → runFullReasoning()                 lib/reasoning
-  → buildDecisionObject()              lib/decision
-  → buildMember() / buildFamilyDecisionObject()  api/daily.js (assembly only)
-
-Client (on load, sync):
-  identityManager.load()               src/identity
-  → fetchDailyAPI(users)               src/app/bootstrap
-  → buildApplicationDTOs()             src/app/bootstrap
-      → buildDailyPackages()           lib/recommendations
-      → rankRecommendations()          lib/recommendations
-      → buildMorningBrief()            lib/dailyBrief
-      → buildWeeklyPlan()              lib/recommendations
-      → adaptRecommendations()         lib/adapters  ← camelCase boundary
-      → adaptDailyBrief()              lib/adapters
-      → adaptTimeline()                lib/adapters
-      → adaptWeeklyPlan()              lib/adapters
-      → adaptMembers()                 lib/adapters
-  → useBootstrap() state               src/hooks
-  → AppShell → Shell → Screen          src/layout, src/components
+  → getDailyAstronomy(targetDate)             Layer 1
+  → getBirthChartFromParts(day,mo,yr,bh,bm,lat,lon,tz)  Layer 1 — P0-1/P0-2 fix
+  → buildAstroContext(astro, chart, dob, ahead, targetDate)  Layer 2 — P0-5/P0-6 fix
+  → buildDecisionObject(ctx, seed, ahead)     Layer 4
+  → buildDailyInsight(decisionObj, ...)       Layer 5 — ONE canonical model
+  → buildFamilyDTO(alignment, members)        Layer 8 — P0-4 fix
+  → serialize to DTO                          Layer 9
+  
+Client:
+  → fetchDailyAPI(users, daysAhead, calculationDate)  calculationDate from client local TZ
+  → buildApplicationDTOs(daily, feedback)    Bootstrap
+  → adaptDailyBrief / adaptRecommendations / adaptTimeline / adaptWeeklyPlan / adaptMembers
+  → useBootstrap() state
+  → AppShell → Shell → Screen (render only)
 ```
 
-## Key Architectural Decisions
+## Key Architectural Fixes Applied
 
-See `docs/architecture/` for full ADRs.
+| Sprint | Fix | File |
+|---|---|---|
+| R2.1 | Birth time converted to UTC before JD | `lib/astronomy/timeUtils.js` |
+| R2.1 | Lagna uses actual longitude (not 0°) | `lib/astronomy/ephemeris.js` |
+| R2.1 | Dasha uses targetDate not new Date() | `lib/astrology/dasha.js` |
+| R2.1 | feedbackAdj no longer passed as userDob | `api/daily.js` |
+| R2.2 | DailyInsight is canonical product output | `lib/models/DailyInsight.js` |
+| R2.2 | api/daily builds DailyInsight then serializes | `api/daily.js` |
+| R2.2 | Family overlap computed server-side | `api/daily.js` → `lib/planning/familyOverlap.js` |
+| R2.2 | Domain star cap removed; exceptions explicit | `lib/adapters/RecommendationAdapter.js` |
+| R2.2 | suitabilityTier/Score reach DailyBriefAdapter | `lib/adapters/DailyBriefAdapter.js` |
 
-**ADR-001:** Layered architecture — data flows down, never up  
-**ADR-002:** BootstrapManager owns all API calls — hooks own only React state  
-**ADR-003:** Adapter layer is the only place snake_case → camelCase conversion occurs  
+## DTO Boundary (Constitution §17)
 
-## Identity Architecture
+All engine output reaches React through adapters. No raw engine object appears in any component.
 
-User identity is stored in `localStorage` under key `kairos_identity_v1`.  
-All reads and writes go through `IdentityManager` (singleton) → `IdentityRepository`.  
-No component or hook accesses `localStorage` directly.
+**Single adapter boundary:**
+- `lib/adapters/` — all production adapters
+- `lib/adapters/PlannerHorizonAdapter.js` — Planner horizon responses
+- `lib/adapters/MemberAdapter.js` — family member DTOs
 
-Schema versioning in `IdentityManager.js` handles forward/backward compatibility.
+## Location Resolution
 
-## Adaptive Layout
+`lib/astronomy/birthLocation.js` — three-state model:
+- `UNRESOLVED` — text entered, no coordinates known
+- `APPROXIMATE` — city matched in known-city list (35+ cities)
+- `RESOLVED` — exact coordinates supplied
 
-Three shells driven by `useLayout()` detecting viewport width:
-- `< 768px` → `MobileShell` (bottom nav, single column)
-- `768–1199px` → `TabletShell` (sidebar nav, single main column)
-- `≥ 1200px` → `DesktopShell` (sidebar + main + context panel)
+`lib/astronomy/timeUtils.js` — canonical local→UTC conversion using IANA timezone.
 
-Each tab is a **true primary route** — only one screen renders at a time.
+## Legacy Code Status
 
-## Design System
+| File | Status | Action |
+|---|---|---|
+| `api/ask.js` | LEGACY — returns HTTP 410 | Retain |
+| `api/astro.js` | LEGACY — no callers | Retain with header |
+| `api/engine.js` | DEAD — no callers | Retain with header |
+| `lib/astro/*` | LEGACY — only imported by `api/astro.js` | Retain with header |
+| `lib/decision/index.js` | LEGACY — no callers | Retain with header |
+| `lib/decision/recommendations.js` | LEGACY — test migrated to canonical | Retain with header |
 
-All visual tokens in `src/styles/tokens/`. All reusable components in `src/design-system/components/`. Screens import via `src/components/common/index.jsx`.
+## One Source of Truth
 
-No raw hex values in component files. No magic spacing numbers. All from tokens.
-
-**Frozen after v30:** No new visual patterns without updating the Design System.
+| Concept | Location |
+|---|---|
+| RELEASE_VERSION | `lib/utils/version.js` |
+| CALC_VERSION | `lib/utils/version.js` |
+| Color tokens | `src/styles/tokens/colors.js` |
+| Score→tier mapping | `lib/models/scoreTiers.js` |
+| Domain dim mapping | `lib/models/DailyInsight.js` (DOMAIN_DIM) |
+| Activity types | `lib/planning/activityPlanner.js` (ACTIVITY_TYPES) |
+| Identity schema | `src/identity/IdentityRepository.js` (STORAGE_KEY, SCHEMA_VERSION) |

@@ -18,7 +18,7 @@ const NAV = [
   { id:TABS.PLANNER, label:'Planner'  },
   { id:TABS.FAMILY,  label:'Family'   },
   { id:TABS.JOURNAL, label:'Insights' },
-  { id:TABS.MORE,    label:'Settings' },
+  { id:TABS.MORE,    label:'Profile'  },
 ]
 
 function BottomNav({ active, onSelect }) {

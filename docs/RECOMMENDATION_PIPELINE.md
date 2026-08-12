@@ -81,4 +81,5 @@ Layer 7: Adapters (adaptRecommendations)
 - **v27:** All categories shared global `goldenWindow` — fixed by per-category scoring
 - **v30:** `best_time` snake_case lost in adapter — fixed in `RecommendationAdapter`
 - **v30.3:** `daily.why` didn't exist — fixed to use `member.summary`
-- **v30.6:** All categories showing stars=5 on 2-star days — fixed by capping in adapter
+- **v30.6:** All categories showing stars=5 on 2-star days — cap was applied; then R2.2 removed the cap intentionally
+- **R2.2:** Star cap removed — domain stars now reflect domain-specific evidence (P0-6); domain exceptions exposed via `isException`/`exceptionReason` in DailyInsight.domains

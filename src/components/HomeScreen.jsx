@@ -58,6 +58,16 @@ function SetupPrompt({ onSetup }) {
   )
 }
 
+// ── Tier display labels (R2.4: prefer words over numbers per spec) ─────────────
+// Map engine tier keys → user-facing display labels
+const TIER_DISPLAY = Object.freeze({
+  Excellent:   'Exceptional',
+  Good:        'Strong',
+  Neutral:     'Moderate',
+  Moderate:    'Challenging',
+  Challenging: 'Caution',
+})
+
 // ── Day summary hero ──────────────────────────────────────────────────────────
 
 function DaySummary({ brief, dateContext }) {
@@ -71,7 +81,7 @@ function DaySummary({ brief, dateContext }) {
 
   const tier     = brief.suitabilityTier || 'Neutral'
   const tierColor = Suitability[tier] || Text.Secondary
-  const stars     = brief.stars || 3
+  // stars intentionally secondary per R2.4 spec — not displayed prominently
 
   return (
     <div style={{ padding:`${Space['3xl']}px ${Space.xl}px ${Space.xl}px` }}>
@@ -80,16 +90,12 @@ function DaySummary({ brief, dateContext }) {
         {dateContext?.fullDate || ''}
       </p>
 
-      {/* Day rating — typography-led, no card */}
+      {/* Day rating — label-led per R2.4 spec. Stars are secondary. */}
       <div style={{ marginBottom:Space.xl }}>
-        <div style={{ display:'flex', alignItems:'baseline', gap:Space.md, marginBottom:Space.sm }}>
-          <span style={{ fontSize:44, fontWeight:FontWeight.Heavy, color:tierColor, lineHeight:1 }}>
-            {stars}
-          </span>
-          <span style={{ fontSize:FontSize.Heading2, fontWeight:FontWeight.Bold, color:tierColor }}>
-            {tier}
-          </span>
-        </div>
+        <p style={{ fontSize:FontSize.Heading2, fontWeight:FontWeight.Bold,
+          color:tierColor, lineHeight:1.1, marginBottom:Space.xs }}>
+          {TIER_DISPLAY[tier] || tier}
+        </p>
         {brief.theme && (
           <p style={{ fontSize:FontSize.Body, color:Text.Secondary, marginBottom:0 }}>
             {brief.theme}

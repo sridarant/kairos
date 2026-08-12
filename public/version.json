@@ -1,6 +1,6 @@
 {
-  "version": "30.10.2",
+  "version": "30.10.5",
   "name": "Kairos",
-  "release": "R2.2 Canonical Truth \u2014 DailyInsight, Family DTO, Domain Exceptions",
+  "release": "R2.5 Production Hardening \u2014 Integration Tests, Security Audit, Release Gate",
   "date": "2026-08-11"
 }

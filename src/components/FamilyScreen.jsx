@@ -229,7 +229,7 @@ function IndividualDay({ member, identityMember, dateContext }) {
         {member.goldenWindow && (
           <div style={{ background:`${Accent}11`, borderRadius:Radius.lg, padding:'9px 12px', marginBottom:Space.sm }}>
             <p style={{ fontSize:FontSize.Label, textTransform:'uppercase', letterSpacing:'0.07em',
-              color:Text.Secondary, fontWeight:FontWeight.Medium, marginBottom:Space.xs }}>Best Window</p>
+              color:Text.Secondary, fontWeight:FontWeight.Medium, marginBottom:Space.xs }}>Best family window</p>
             <p style={{ fontSize:FontSize.Heading2, fontWeight:FontWeight.Heavy, color:Accent }}>{member.goldenWindow}</p>
           </div>
         )}
@@ -351,7 +351,7 @@ export default function FamilyScreen({
       ) : (
         <div style={{ background:Surface.Card, borderRadius:Radius.lg, padding:Pad.cardSm, marginBottom:Space.xl }}>
           <p style={{ fontSize:FontSize.Caption, color:Text.Secondary }}>
-            Add family members in Settings to see individual views and shared windows.
+            Add family members in Profile to see individual views and shared windows.
           </p>
         </div>
       )}

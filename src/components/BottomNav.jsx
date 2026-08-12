@@ -5,7 +5,7 @@ const TABS = [
   { id:'planner', icon:'📅', label:'Planner',   q:'When should I plan?' },
   { id:'family',  icon:'👨‍👩‍👧', label:'Family',   q:'How does the family day look?' },
   { id:'journal', icon:'📖', label:'Journal',   q:'What happened?' },
-  { id:'more',    icon:'⚙️',  label:'Settings',  q:'Preferences & more' }
+  { id:'more',    icon:'◦',   label:'Profile',   q:'Profile & settings' }
 ]
 
 export default function BottomNav({ active='today', onToday, onPlanner, onFamily, onJournal, onMore }) {

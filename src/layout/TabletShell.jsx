@@ -18,11 +18,11 @@ const NAV_ITEMS = [
   { id:TABS.PLANNER, icon:'📅', label:'Planner'  },
   { id:TABS.FAMILY,  icon:'👨‍👩‍👧', label:'Family'   },
   { id:TABS.JOURNAL, icon:'💡', label:'Insights' },
-  { id:TABS.MORE,    icon:'⚙️',  label:'Settings' },
+  { id:TABS.MORE,    icon:'◦',   label:'Profile'  },
 ]
 
 function SideNav({ active, onSelect, profileStatus, primaryUser }) {
-  const statusColor = PROFILE_STATUS_COLOR[profileStatus] || '#666'
+  const statusColor = PROFILE_STATUS_COLOR[profileStatus] || Text.Muted
   return (
     <div style={{ width:200, flexShrink:0, position:'sticky', top:0, height:'100vh',
       display:'flex', flexDirection:'column', padding:`${Space['3xl']}px ${Space.xl}px`,

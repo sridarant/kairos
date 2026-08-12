@@ -6,7 +6,7 @@
  */
 import { SectionTitle } from '../../common/index.jsx'
 import { GhostButton } from '../../common/index.jsx'
-import { Surface, Text, Status, Accent, Radius, Space, Pad, FontSize, FontWeight } from '../../../styles/tokens/index.js'
+import { Surface, Text, Text, Status, Accent, Radius, Space, Pad, FontSize, FontWeight } from '../../../styles/tokens/index.js'
 
 export default function FamilyBriefSection({ brief, daily, onFamilyPlan }) {
   const fb        = brief?.familyBrief
@@ -52,6 +52,7 @@ export default function FamilyBriefSection({ brief, daily, onFamilyPlan }) {
                 color: Text.Secondary, fontWeight: FontWeight.Medium, marginBottom: 2 }}>
                 Best Together
               </p>
+              <p style={{ fontSize:FontSize.Badge, color:Text.Muted, marginBottom:2 }}>Best family window</p>
               <p style={{ fontSize: FontSize.Body, color: Accent, fontWeight: FontWeight.Bold }}>{bestWindow}</p>
             </div>
           )}
